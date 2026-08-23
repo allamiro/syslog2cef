@@ -1,0 +1,46 @@
+# rpkg preprocessor macros for building the SRPM straight from a git checkout.
+#
+# syslogcef.spec fetches Source0 from PyPI, which is right for a release
+# build and for a Fedora review. It is wrong for the COPR project, which
+# builds from every push to main: a "Bump version" commit lands on main
+# before the release workflow has published that version to PyPI, so the
+# COPR SRPM build fails with a 404, and a build of any other commit would
+# silently package the older PyPI sdist rather than the commit itself.
+#
+# syslogcef_git_sdist produces the tarball that Source0 names
+# (syslog2cef-<Version>.tar.gz, unpacking to syslog2cef-<Version>/) from the
+# git tree at HEAD. rpm only downloads a source that is missing from the
+# source directory, so once the tarball is there the build never touches the
+# network. The spec invokes the macro from a comment line, so outside rpkg
+# (plain rpmbuild, the release workflow) the spec is unchanged.
+#
+# Registered through packaging/rpm/rpkg.conf. Try it locally with
+#   cd packaging/rpm && rpkg srpm --outdir /tmp/out
+
+function syslogcef_git_sdist {
+    git_check_repo || return
+
+    version="$(sed -n -E 's/^Version:[[:space:]]*([^[:space:]]+).*/\1/p' "$INPUT_PATH")"
+    if [ -z "$version" ]; then
+        log_error "could not read Version: from $INPUT_PATH."
+        return 1
+    fi
+
+    pyproject_version="$(sed -n -E 's/^version[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' "$GIT_ROOT/pyproject.toml")"
+    if [ "$pyproject_version" != "$version" ]; then
+        log_error "spec Version: $version does not match pyproject.toml version ${pyproject_version:-(unset)}; bump both together."
+        return 1
+    fi
+
+    dir_name="syslog2cef-$version"
+    source_name="$dir_name.tar.gz"
+
+    if [ -z "$OUTDIR" ]; then
+        # 'rpkg spec' without --sources: nothing to generate.
+        output "$source_name is generated from git when sources are produced"
+        return
+    fi
+
+    git_repo_archive dir_name="$dir_name" source_name="$source_name" >/dev/null || return
+    output "generated $source_name from git $GIT_HEAD_SHORT"
+}

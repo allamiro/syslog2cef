@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- COPR builds no longer fail after a version bump. The COPR project builds
+  every push to `main` with rpkg, and the spec's `Source0` is the PyPI sdist,
+  which does not exist yet when the "Bump version" commit lands on `main`
+  (the release workflow publishes it a few minutes later), so every webhook
+  build of a new version failed downloading it. When rpkg preprocesses the
+  spec, a project macro (`packaging/rpm/rpkg.macros`, registered by
+  `packaging/rpm/rpkg.conf`) now generates that tarball from the git
+  checkout, so COPR builds package the pushed commit and never depend on
+  PyPI. The spec is unchanged for plain `rpmbuild` and the release workflow.
+
 ## [0.3.3] - 2026-08-12
 
 ### Fixed

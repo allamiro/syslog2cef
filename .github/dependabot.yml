@@ -1,7 +1,11 @@
 # Dependabot keeps the workflow actions and the optional Python extras
-# current. The project itself declares no runtime dependencies, so a
-# dependency update never changes the shipped package - it changes CI and
-# the optional kafka/fuzz extras only.
+# current.
+#
+# Most of what it raises here only affects CI. The exception is
+# kafka-python: it backs the `kafka` extra and is imported at runtime, so a
+# bump does reach users. It is kept out of the grouped pull request below
+# and is never merged unattended - see
+# .github/workflows/dependabot-auto-merge.yml.
 #
 # Security updates are raised by GitHub regardless of this file; the
 # schedules below also surface ordinary version updates so a security fix is
@@ -36,6 +40,10 @@ updates:
       python-tooling:
         patterns:
           - "*"
+        # A shipped runtime dependency gets its own pull request so it is
+        # reviewed on its own rather than riding along with CI tooling.
+        exclude-patterns:
+          - "kafka-python*"
         update-types:
           - minor
           - patch

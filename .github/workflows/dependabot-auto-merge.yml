@@ -1,15 +1,30 @@
 # Merge Dependabot updates without a human when they are safe to take
 # unattended, and leave the rest for review.
 #
-# "Safe" means a security fix, or an ordinary patch/minor bump. A major
-# version is never merged automatically - not even for a security advisory,
-# because a major is where a fix is most likely to change behaviour. Those
-# are labelled and left open instead.
+# Two things are never merged automatically:
 #
-# Merging is done with GitHub's auto-merge, so the pull request lands only
-# after the required status checks on main pass. Without those required
-# checks auto-merge would merge immediately, so branch protection on main is
-# part of this mechanism, not an optional extra.
+#   * A major version. That is where a fix is most likely to change
+#     behaviour, so it gets a human even when it carries an advisory.
+#   * A dependency that ships to users. kafka-python backs the `kafka`
+#     extra and is imported at runtime; CI has no live broker, so a green
+#     run is not evidence that the extra still works.
+#
+# Everything else - the workflow actions, and the test/fuzz tooling - only
+# affects CI, so a passing matrix is real evidence and those merge on their
+# own.
+#
+# Merging uses GitHub's auto-merge, so a pull request lands only after the
+# required status checks on main pass. Auto-merge with no required checks
+# merges immediately, so branch protection on main is part of this
+# mechanism rather than an optional extra.
+#
+# `on: pull_request` with an explicit `permissions` block is the documented
+# arrangement: a Dependabot-triggered run gets a read-only GITHUB_TOKEN by
+# default, and the permissions key is what raises it. pull_request_target
+# is deliberately not used - it would run in the context of the base
+# repository with a writable token, which is the pattern to avoid unless
+# fork code genuinely must be handled, and Dependabot branches live in this
+# repository.
 name: Dependabot auto-merge
 
 on: pull_request
@@ -31,24 +46,60 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Hold major updates for review
-        if: steps.meta.outputs.update-type == 'version-update:semver-major'
+      - name: Decide whether this may merge unattended
+        id: gate
+        env:
+          UPDATE_TYPE: ${{ steps.meta.outputs.update-type }}
+          DEPENDENCY_NAMES: ${{ steps.meta.outputs.dependency-names }}
+        run: |
+          set -euo pipefail
+          # Dependencies that reach users rather than only CI. Keep in step
+          # with the optional-dependencies that are imported at runtime in
+          # pyproject.toml.
+          shipped_at_runtime="kafka-python"
+
+          names=",$(printf '%s' "$DEPENDENCY_NAMES" | tr -d '[:space:]'),"
+          reason=""
+
+          if [ "$UPDATE_TYPE" = "version-update:semver-major" ]; then
+            reason="this is a major version update, where a fix is most likely to change behaviour"
+          else
+            for dep in $shipped_at_runtime; do
+              case "$names" in
+                *",$dep,"*)
+                  reason="\`$dep\` ships to users through an extra and is imported at runtime, and CI cannot exercise it"
+                  ;;
+              esac
+            done
+          fi
+
+          if [ -n "$reason" ]; then
+            echo "merge=false" >> "$GITHUB_OUTPUT"
+            echo "reason=$reason" >> "$GITHUB_OUTPUT"
+          else
+            echo "merge=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Hold for review
+        if: steps.gate.outputs.merge == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR: ${{ github.event.pull_request.html_url }}
+          REASON: ${{ steps.gate.outputs.reason }}
         run: |
+          set -euo pipefail
           gh pr edit "$PR" --add-label "needs-triage"
-          gh pr comment "$PR" --body \
-            "Major version update: not merged automatically. A major release is
-          where a fix is most likely to change behaviour, so this one needs a
-          human to look at the changelog before it lands."
+          gh pr comment "$PR" --body "Not merged automatically because ${REASON}. Please review the changelog before merging."
 
       - name: Approve and enable auto-merge
-        if: steps.meta.outputs.update-type != 'version-update:semver-major'
+        if: steps.gate.outputs.merge == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR: ${{ github.event.pull_request.html_url }}
+          UPDATE_TYPE: ${{ steps.meta.outputs.update-type }}
+          DEPENDENCY_NAMES: ${{ steps.meta.outputs.dependency-names }}
         run: |
+          set -euo pipefail
           gh pr review "$PR" --approve \
-            --body "Automatically approved: ${{ steps.meta.outputs.update-type }} for ${{ steps.meta.outputs.dependency-names }}."
+            --body "Automatically approved: ${UPDATE_TYPE} for ${DEPENDENCY_NAMES}. These affect CI only; the shipped package is unchanged."
           gh pr merge "$PR" --auto --squash

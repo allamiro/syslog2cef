@@ -5,6 +5,13 @@ Summary:        Convert syslog events to ArcSight CEF
 
 License:        MIT
 URL:            https://github.com/allamiro/syslog2cef
+# Source0 is the sdist published on PyPI, which is what a release build and
+# a Fedora review use. When rpkg preprocesses this spec (the COPR project
+# builds every push to main that way), the macro on the next line generates
+# the same tarball from the git checkout instead, so the build reflects the
+# pushed commit and does not depend on the version being on PyPI yet. To
+# plain rpmbuild the line is just a comment. See packaging/rpm/rpkg.macros.
+# {{{ syslog2cef_git_sdist }}}
 Source0:        %{pypi_source syslog2cef}
 Source1:        syslogcef.service
 Source2:        syslogcef.conf

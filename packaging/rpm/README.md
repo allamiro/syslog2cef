@@ -2,28 +2,59 @@
 
 This directory contains everything needed to build the syslog2cef RPM:
 
-- `syslog2cef.spec` — the spec file (noarch, built from the PyPI sdist).
-- `syslogcef.service` — systemd unit that follows the configured input
-  file and appends CEF output.
-- `syslogcef.conf` — environment file installed to
-  `/etc/syslogcef/syslogcef.conf` (marked `%config(noreplace)`).
+- `syslog2cef.spec` — the spec file (noarch, built from the PyPI sdist
+  `syslog2cef-X.Y.Z.tar.gz`).
+- `syslogcef.service` / `syslogcef@.service` — systemd units that follow
+  the configured input file and append CEF output.
+- `syslogcef.conf` / `syslogcef-instance.conf` — environment files
+  installed under `/etc/syslogcef/` (marked `%config(noreplace)`).
+- `syslogcef.logrotate`, `syslogcef.sysusers`, `syslogcef.1` — logrotate
+  snippet, sysusers.d entry, and man page.
+- `rpkg.conf` / `rpkg.macros` — used only when rpkg builds the SRPM from a
+  git checkout (the COPR project); see below.
 
 ## Building Locally
 
 On Fedora or an Enterprise Linux 9+ system:
 
 ```bash
-sudo dnf install rpm-build rpmdevtools python3-devel pyproject-rpm-macros systemd-rpm-macros
+sudo dnf install rpm-build rpmdevtools python3-devel python3-build \
+  pyproject-rpm-macros systemd-rpm-macros
 rpmdev-setuptree
 
 # From a repository checkout
-python -m build --sdist
+python3 -m build --sdist
 cp dist/syslog2cef-*.tar.gz ~/rpmbuild/SOURCES/
-cp packaging/rpm/syslogcef.service packaging/rpm/syslogcef.conf ~/rpmbuild/SOURCES/
+cp packaging/rpm/syslogcef.service packaging/rpm/syslogcef@.service \
+   packaging/rpm/syslogcef.conf packaging/rpm/syslogcef-instance.conf \
+   packaging/rpm/syslogcef.logrotate packaging/rpm/syslogcef.sysusers \
+   packaging/rpm/syslogcef.1 ~/rpmbuild/SOURCES/
 rpmbuild -ba packaging/rpm/syslog2cef.spec
 ```
 
 The built package appears under `~/rpmbuild/RPMS/noarch/`.
+
+## Building from Git with rpkg (what COPR does)
+
+The [COPR project](https://copr.fedorainfracloud.org/coprs/allamiro/syslogcef/)
+rebuilds the package on every push to `main`, using rpkg with this
+directory as the package directory. Because that happens before a new
+version reaches PyPI (and for commits that never do), `rpkg.macros`
+provides the `syslog2cef_git_sdist` macro, invoked from a comment line in
+the spec, which generates `syslog2cef-X.Y.Z.tar.gz` from the git tree at
+`HEAD`. rpm only downloads sources that are missing, so the build never
+contacts PyPI. Outside rpkg the line is an ordinary comment and the spec
+builds from the PyPI sdist as above. The macro fails the build if the spec
+`Version:` and the `pyproject.toml` version disagree, so bump both together.
+
+To reproduce a COPR build locally:
+
+```bash
+sudo dnf install rpkg
+cd packaging/rpm
+rpkg srpm --outdir /tmp/out          # SRPM with the tarball built from git
+rpmbuild --rebuild /tmp/out/syslogcef-*.src.rpm
+```
 
 ## Signing the RPM
 

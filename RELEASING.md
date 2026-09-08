@@ -34,6 +34,15 @@ git push origin vX.Y.Z
 The workflow does the rest. (The RPM spec version is also synced from the
 tag automatically at build time.)
 
+Independently of the release workflow, the
+[COPR project](https://copr.fedorainfracloud.org/coprs/allamiro/syslogcef/)
+rebuilds the package for Fedora, EPEL 9/10, and CentOS Stream 9/10 on every
+push to `main` (a GitHub webhook, package source: this repository,
+`packaging/rpm/syslogcef.spec`, rpkg method). Those builds generate the
+source tarball from the git checkout ([packaging/rpm/rpkg.macros](packaging/rpm/rpkg.macros)),
+so they do not wait for the sdist to reach PyPI and always package the
+pushed commit; nothing needs to be triggered by hand.
+
 ## One-Time Setup
 
 ### PyPI publishing

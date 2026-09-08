@@ -1,0 +1,41 @@
+# Dependabot keeps the workflow actions and the optional Python extras
+# current. The project itself declares no runtime dependencies, so a
+# dependency update never changes the shipped package - it changes CI and
+# the optional kafka/fuzz extras only.
+#
+# Security updates are raised by GitHub regardless of this file; the
+# schedules below also surface ordinary version updates so a security fix is
+# rarely a large jump. See .github/workflows/dependabot-auto-merge.yml for
+# which of these merge without a human.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - ci
+    groups:
+      # One PR for routine action bumps instead of one per action.
+      actions:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - python
+    groups:
+      python-tooling:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch

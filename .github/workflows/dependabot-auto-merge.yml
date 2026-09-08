@@ -1,0 +1,54 @@
+# Merge Dependabot updates without a human when they are safe to take
+# unattended, and leave the rest for review.
+#
+# "Safe" means a security fix, or an ordinary patch/minor bump. A major
+# version is never merged automatically - not even for a security advisory,
+# because a major is where a fix is most likely to change behaviour. Those
+# are labelled and left open instead.
+#
+# Merging is done with GitHub's auto-merge, so the pull request lands only
+# after the required status checks on main pass. Without those required
+# checks auto-merge would merge immediately, so branch protection on main is
+# part of this mechanism, not an optional extra.
+name: Dependabot auto-merge
+
+on: pull_request
+
+permissions:
+  contents: read
+
+jobs:
+  auto-merge:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Fetch update metadata
+        id: meta
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Hold major updates for review
+        if: steps.meta.outputs.update-type == 'version-update:semver-major'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.html_url }}
+        run: |
+          gh pr edit "$PR" --add-label "needs-triage"
+          gh pr comment "$PR" --body \
+            "Major version update: not merged automatically. A major release is
+          where a fix is most likely to change behaviour, so this one needs a
+          human to look at the changelog before it lands."
+
+      - name: Approve and enable auto-merge
+        if: steps.meta.outputs.update-type != 'version-update:semver-major'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.html_url }}
+        run: |
+          gh pr review "$PR" --approve \
+            --body "Automatically approved: ${{ steps.meta.outputs.update-type }} for ${{ steps.meta.outputs.dependency-names }}."
+          gh pr merge "$PR" --auto --squash

@@ -1,17 +1,17 @@
-Name:           syslogcef
-Version:        0.3.3
+Name:           syslog2cef
+Version:        0.3.4
 Release:        1%{?dist}
 Summary:        Convert syslog events to ArcSight CEF
 
 License:        MIT
-URL:            https://github.com/allamiro/syslogcef
+URL:            https://github.com/allamiro/syslog2cef
 # Source0 is the sdist published on PyPI, which is what a release build and
 # a Fedora review use. When rpkg preprocesses this spec (the COPR project
 # builds every push to main that way), the macro on the next line generates
 # the same tarball from the git checkout instead, so the build reflects the
 # pushed commit and does not depend on the version being on PyPI yet. To
 # plain rpmbuild the line is just a comment. See packaging/rpm/rpkg.macros.
-# {{{ syslogcef_git_sdist }}}
+# {{{ syslog2cef_git_sdist }}}
 Source0:        %{pypi_source syslog2cef}
 Source1:        syslogcef.service
 Source2:        syslogcef.conf
@@ -27,13 +27,19 @@ Source7:        syslogcef.sysusers
 %global python3_pkgversion 3.11
 %endif
 
+# Renamed from syslogcef in 0.3.4 to match the project and PyPI name.
+# The command, config paths and unit names are unchanged, so an existing
+# install upgrades in place.
+Provides:       syslogcef = %{version}-%{release}
+Obsoletes:      syslogcef < 0.3.4-1
+
 BuildArch:      noarch
 BuildRequires:  python%{python3_pkgversion}-devel
 BuildRequires:  pyproject-rpm-macros
 BuildRequires:  systemd-rpm-macros
 
 %description
-syslogcef converts syslog events (RFC3164, RFC5424, rsyslog, and systemd
+syslog2cef converts syslog events (RFC3164, RFC5424, rsyslog, and systemd
 journal exports) into ArcSight Common Event Format (CEF), with bundled
 vendor mappings for Cisco ASA/IOS, F5, Linux, and VMware sources. This
 package installs the syslogcef command line tool and a systemd service
@@ -94,6 +100,11 @@ install -D -m 0644 %{SOURCE7} %{buildroot}%{_sysusersdir}/syslogcef.conf
 %{_sysusersdir}/syslogcef.conf
 
 %changelog
+* Wed Aug 12 2026 Tamir Suliman <allamiro@gmail.com> - 0.3.4-1
+- Rename the package from syslogcef to syslog2cef to match the project,
+  repository and PyPI distribution; Provides/Obsoletes keep upgrades in place
+- The syslogcef command, config paths, unit names and system user are unchanged
+
 * Wed Aug 12 2026 Tamir Suliman <allamiro@gmail.com> - 0.3.3-1
 - Stop a cached hostless adaptive layout from suppressing hosts on later
   lines; keep IPv6 hosts intact and retain ts_orig

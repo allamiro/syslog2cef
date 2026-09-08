@@ -1,8 +1,8 @@
 # RPM Packaging
 
-This directory contains everything needed to build the syslogcef RPM:
+This directory contains everything needed to build the syslog2cef RPM:
 
-- `syslogcef.spec` — the spec file (noarch, built from the PyPI sdist
+- `syslog2cef.spec` — the spec file (noarch, built from the PyPI sdist
   `syslog2cef-X.Y.Z.tar.gz`).
 - `syslogcef.service` / `syslogcef@.service` — systemd units that follow
   the configured input file and append CEF output.
@@ -29,7 +29,7 @@ cp packaging/rpm/syslogcef.service packaging/rpm/syslogcef@.service \
    packaging/rpm/syslogcef.conf packaging/rpm/syslogcef-instance.conf \
    packaging/rpm/syslogcef.logrotate packaging/rpm/syslogcef.sysusers \
    packaging/rpm/syslogcef.1 ~/rpmbuild/SOURCES/
-rpmbuild -ba packaging/rpm/syslogcef.spec
+rpmbuild -ba packaging/rpm/syslog2cef.spec
 ```
 
 The built package appears under `~/rpmbuild/RPMS/noarch/`.
@@ -40,7 +40,7 @@ The [COPR project](https://copr.fedorainfracloud.org/coprs/allamiro/syslogcef/)
 rebuilds the package on every push to `main`, using rpkg with this
 directory as the package directory. Because that happens before a new
 version reaches PyPI (and for commits that never do), `rpkg.macros`
-provides the `syslogcef_git_sdist` macro, invoked from a comment line in
+provides the `syslog2cef_git_sdist` macro, invoked from a comment line in
 the spec, which generates `syslog2cef-X.Y.Z.tar.gz` from the git tree at
 `HEAD`. rpm only downloads sources that are missing, so the build never
 contacts PyPI. Outside rpkg the line is an ordinary comment and the spec
@@ -67,14 +67,14 @@ cat >> ~/.rpmmacros <<'EOF'
 %_gpg_name  Your Name <you@example.com>
 EOF
 
-rpmsign --addsign ~/rpmbuild/RPMS/noarch/syslogcef-*.noarch.rpm
+rpmsign --addsign ~/rpmbuild/RPMS/noarch/syslog2cef-*.noarch.rpm
 ```
 
 Consumers verify with:
 
 ```bash
 rpm --import your-public-key.asc
-rpm --checksig syslogcef-*.noarch.rpm
+rpm --checksig syslog2cef-*.noarch.rpm
 ```
 
 The release workflow signs automatically when the `GPG_PRIVATE_KEY` and
@@ -84,7 +84,7 @@ The release workflow signs automatically when the `GPG_PRIVATE_KEY` and
 ## Installing and Running the Service
 
 ```bash
-sudo dnf install syslogcef-*.noarch.rpm
+sudo dnf install syslog2cef-*.noarch.rpm
 sudo vi /etc/syslogcef/syslogcef.conf   # set INPUT_FILE / OUTPUT_FILE
 sudo systemctl enable --now syslogcef
 journalctl -u syslogcef -f

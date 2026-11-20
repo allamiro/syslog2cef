@@ -2,6 +2,19 @@
   <img src="https://raw.githubusercontent.com/allamiro/syslogcef/main/docs/logo.svg" alt="syslogcef logo" width="540">
 </p>
 
+<p align="center">
+  <a href="https://github.com/allamiro/syslog2cef/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/allamiro/syslog2cef/ci.yml?branch=main&label=CI" alt="CI status"></a>
+  <a href="https://pypi.org/project/syslog2cef/"><img src="https://img.shields.io/pypi/v/syslog2cef" alt="PyPI version"></a>
+  <a href="https://pypi.org/project/syslog2cef/"><img src="https://img.shields.io/pypi/pyversions/syslog2cef" alt="Supported Python versions"></a>
+  <a href="https://pypistats.org/packages/syslog2cef"><img src="https://img.shields.io/pypi/dm/syslog2cef" alt="PyPI downloads per month"></a>
+  <a href="https://copr.fedorainfracloud.org/coprs/allamiro/syslogcef/"><img src="https://copr.fedorainfracloud.org/coprs/allamiro/syslogcef/package/syslogcef/status_image/last_build.png" alt="COPR build status"></a>
+  <a href="https://github.com/allamiro/syslog2cef/pkgs/container/syslogcef"><img src="https://img.shields.io/badge/container-ghcr.io-blue?logo=docker" alt="Container image on ghcr.io"></a>
+  <a href="https://github.com/allamiro/syslog2cef/actions/workflows/fuzz.yml"><img src="https://img.shields.io/github/actions/workflow/status/allamiro/syslog2cef/fuzz.yml?branch=main&label=deep%20fuzz" alt="Deep fuzz status"></a>
+  <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/badge/lint-ruff-261230" alt="Linted with Ruff"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/allamiro/syslog2cef" alt="MIT license"></a>
+  <a href="CITATION.cff"><img src="https://img.shields.io/badge/cite-CITATION.cff-informational" alt="Citation file"></a>
+</p>
+
 # syslogcef
 
 syslogcef converts syslog events into ArcSight Common Event Format (CEF). It
@@ -158,7 +171,7 @@ normalized event's fields:
     "src": "%(src)s",
     "dst": "%(dst)s",
     "cs1Label": "rawEvent",
-    "cs1": "%(raw_kv)s"
+    "cs1": "%(raw)s"
   }
 }
 ```
@@ -168,7 +181,8 @@ normalized event's fields:
 - `severity_map` translates syslog severity (0-7) to CEF severity (0-10);
   unmapped values pass through.
 - `extensions` maps CEF extension keys to templates. Extensions that
-  resolve to an empty value are omitted.
+  resolve to an empty value are omitted, and so is a custom-field label
+  (`cs1Label`, `cn1Label`, ...) whose paired value is omitted.
 - Available template fields include `host`, `app`, `pid`, `msgid`, `msg`,
   `message_short` (first 120 characters), `raw`, `raw_kv`, `event_code`,
   `facility`, `severity`, `ts`, plus every key=value pair extracted from
@@ -376,6 +390,23 @@ pytest
 
 Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Notable
 changes are tracked in [CHANGELOG.md](CHANGELOG.md).
+
+## Citation
+
+If you use syslog2cef in research or published work, please cite it. The
+metadata is in [CITATION.cff](CITATION.cff), and GitHub's "Cite this
+repository" button produces APA and BibTeX from it.
+
+```bibtex
+@software{suliman_syslog2cef,
+  author  = {Suliman, Tamir},
+  title   = {syslog2cef: Convert syslog to ArcSight Common Event Format (CEF)},
+  version = {0.3.3},
+  year    = {2026},
+  url     = {https://github.com/allamiro/syslog2cef},
+  license = {MIT}
+}
+```
 
 ## License
 

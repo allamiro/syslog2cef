@@ -17,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   midnight on New Year's Eve. The built-in parsers, the adaptive parser and
   custom `--patterns` share the rule, and a yearless Feb 29 resolves to the
   last leap day in the past rather than the nearest one.
+- The Cisco ASA mapping no longer emits `cs1Label=rawEvent` without a `cs1`
+  value (#111). Its `cs1` came from the message's key=value pairs, which most
+  ASA messages do not have, so the value was dropped while the constant label
+  stayed. `cs1` now carries the raw line, like every other bundled mapping.
+  More generally, a custom-field label (`cs1Label`, `cn1Label`,
+  `flexString1Label`, ...) is now dropped whenever its paired value resolves
+  empty, so a mapping can no longer produce a label that describes nothing.
 - COPR builds no longer fail after a version bump. The COPR project builds
   every push to `main` with rpkg, and the spec's `Source0` is the PyPI sdist,
   which does not exist yet when the "Bump version" commit lands on `main`

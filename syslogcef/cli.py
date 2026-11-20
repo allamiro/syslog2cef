@@ -10,6 +10,7 @@ from multiprocessing import Pool, cpu_count
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Optional
 
+from ._version import __author__, __copyright__, __email__, __license__, __version__
 from .api import StreamConverter, convert_line
 
 logger = logging.getLogger(__name__)
@@ -381,8 +382,27 @@ def _optional_path(value: str) -> Optional[Path]:
     return Path(value) if value else None
 
 
+# GNU-style --version text: name and version first (scripts parse it),
+# then copyright, license, and authorship.
+VERSION_TEXT = (
+    f"syslogcef {__version__}\n"
+    f"{__copyright__}\n"
+    f"License {__license__}: <https://opensource.org/licenses/{__license__}>\n"
+    "This is free software: you are free to change and redistribute it.\n"
+    "There is NO WARRANTY, to the extent permitted by law.\n"
+    "\n"
+    f"Written by {__author__} <{__email__}>."
+)
+
+
 def main(argv: Optional[list[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Convert syslog lines to ArcSight CEF")
+    # RawDescriptionHelpFormatter keeps VERSION_TEXT's line breaks; argparse
+    # otherwise reflows the version string onto one line. Option help is
+    # still wrapped as before.
+    parser = argparse.ArgumentParser(
+        description="Convert syslog lines to ArcSight CEF",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("paths", nargs="*", type=Path, help="Input files (defaults to stdin)")
     parser.add_argument("-o", "--output", type=_optional_path, help="Output file; strftime codes such as %%Y-%%m-%%d or %%H start a new file when the rendered path changes (templated paths always append and parent directories are created). Use %%%% for a literal percent; unsupported codes are rejected. An empty value means stdout.")
     parser.add_argument("-a", "--append", action="store_true", help="Append to --output instead of truncating it (implied for templated paths)")
@@ -398,6 +418,12 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--validate", action="store_true", help="Validate CEF extensions against the ArcSight dictionary; violations are logged as warnings")
     parser.add_argument("--strict", action="store_true", help="Like --validate, but exit with an error on type/length violations")
     parser.add_argument("--log-level", default="WARNING", help="Logging level")
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=VERSION_TEXT,
+        help="Show the version, license and author, then exit",
+    )
 
     args = parser.parse_args(argv)
     logging.basicConfig(level=getattr(logging, args.log_level.upper(), logging.WARNING))

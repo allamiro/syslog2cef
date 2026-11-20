@@ -140,6 +140,7 @@ Options:
 | `--validate` | Check CEF extensions against the ArcSight dictionary; violations are logged as warnings. |
 | `--strict` | Like `--validate`, but exit with an error on type or length violations. |
 | `--log-level LEVEL` | Python logging level (default `WARNING`). |
+| `--version` | Print the version, copyright, license and author, then exit. |
 
 `python -m syslogcef` is equivalent to the `syslogcef` entry point.
 

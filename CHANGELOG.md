@@ -16,6 +16,11 @@ rules that read ASA `cs1` or that relied on the previous year inference.
 
 ### Added
 
+- `syslogcef --version` prints the version, copyright, license and author
+  in the GNU format (first line `syslogcef X.Y.Z`); the version is also
+  available as `syslogcef.__version__`. The man page gains `--version`,
+  `--help` and a COPYRIGHT section. Conversion output is unchanged: stdout
+  still carries only CEF records.
 - `CITATION.cff` with software citation metadata, so GitHub offers "Cite
   this repository"; the README has a matching BibTeX entry and status badges.
 - Per-version Python classifiers (3.9 to 3.14) in the package metadata.

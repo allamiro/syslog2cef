@@ -220,3 +220,11 @@ def test_label_is_dropped_when_its_value_is_empty(label, value):
     with_value = _extensions(convert_line("srcip=1.2.3.4 session=abc", mapping=mapping))
     assert f"{label}=Session" in with_value
     assert f"{value}=abc" in with_value
+
+
+def test_custom_key_ending_in_label_is_not_treated_as_a_label():
+    # Only the dictionary's custom-field labels pair with a value; an
+    # independent custom key that merely ends in "Label" keeps its data.
+    ext = _extensions(convert_line("plain log", mapping={"extensions": {"classificationLabel": "Confidential"}}))
+
+    assert "classificationLabel=Confidential" in ext

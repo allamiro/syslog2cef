@@ -91,15 +91,15 @@ jobs:
           gh pr edit "$PR" --add-label "needs-triage"
           gh pr comment "$PR" --body "Not merged automatically because ${REASON}. Please review the changelog before merging."
 
-      - name: Approve and enable auto-merge
+      # No approval step: main requires passing status checks, not a
+      # review, so auto-merge only needs enabling. Approving from a
+      # workflow would also need the repository setting that lets GitHub
+      # Actions approve pull requests, which stays off on purpose.
+      - name: Enable auto-merge
         if: steps.gate.outputs.merge == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR: ${{ github.event.pull_request.html_url }}
-          UPDATE_TYPE: ${{ steps.meta.outputs.update-type }}
-          DEPENDENCY_NAMES: ${{ steps.meta.outputs.dependency-names }}
         run: |
           set -euo pipefail
-          gh pr review "$PR" --approve \
-            --body "Automatically approved: ${UPDATE_TYPE} for ${DEPENDENCY_NAMES}. These affect CI only; the shipped package is unchanged."
           gh pr merge "$PR" --auto --squash

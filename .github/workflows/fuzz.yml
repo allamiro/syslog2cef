@@ -16,8 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - name: Install with fuzz extra
@@ -33,7 +33,7 @@ jobs:
         # Only when the fuzz step itself failed (not e.g. pip install),
         # so the .hypothesis directory is guaranteed to exist.
         if: failure() && steps.fuzz.outcome == 'failure'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: hypothesis-examples
           path: .hypothesis/examples/

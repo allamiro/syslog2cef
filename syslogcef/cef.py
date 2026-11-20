@@ -15,6 +15,9 @@ HEADER_KEYS = (
     "deviceVendor", "deviceProduct", "deviceVersion", "eventClassId", "name",
 )
 
+# Custom-field labels pair with the key they describe: cs1Label -> cs1.
+_LABEL_SUFFIX = "Label"
+
 
 DEFAULT_MAPPING = {
     "deviceVendor": "Generic",
@@ -133,6 +136,14 @@ class MappingResolver:
             value = self._format(template, fields)
             if value:
                 raw[key] = str(value)
+        # A label (cs1Label, cn1Label, flexString1Label, ...) is a constant
+        # and always renders, while its paired value is dropped when the
+        # template resolves empty. A label without its value describes
+        # nothing, so drop it too (#111).
+        for key in [k for k in raw if k.endswith(_LABEL_SUFFIX)]:
+            paired = key[: -len(_LABEL_SUFFIX)]
+            if paired and paired not in raw:
+                del raw[key]
         return raw
 
     def resolve_extensions(self, fields: Mapping[str, Any]) -> Dict[str, str]:

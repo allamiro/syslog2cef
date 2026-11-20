@@ -13,7 +13,10 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moved to 26.04, where actions/setup-python has
+    # no CPython 3.9 build, failing the declared-minimum matrix entry.
+    # Revisit when 3.9 support is dropped.
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -39,7 +42,7 @@ jobs:
         run: pytest
 
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
@@ -54,7 +57,7 @@ jobs:
         run: shellcheck packaging/debian/build-deb.sh
 
   docker:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - name: Lint Dockerfile

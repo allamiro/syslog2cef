@@ -1,0 +1,49 @@
+# Dependabot keeps the workflow actions and the optional Python extras
+# current.
+#
+# Most of what it raises here only affects CI. The exception is
+# kafka-python: it backs the `kafka` extra and is imported at runtime, so a
+# bump does reach users. It is kept out of the grouped pull request below
+# and is never merged unattended - see
+# .github/workflows/dependabot-auto-merge.yml.
+#
+# Security updates are raised by GitHub regardless of this file; the
+# schedules below also surface ordinary version updates so a security fix is
+# rarely a large jump. See .github/workflows/dependabot-auto-merge.yml for
+# which of these merge without a human.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - ci
+    groups:
+      # One PR for routine action bumps instead of one per action.
+      actions:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - python
+    groups:
+      python-tooling:
+        patterns:
+          - "*"
+        # A shipped runtime dependency gets its own pull request so it is
+        # reviewed on its own rather than riding along with CI tooling.
+        exclude-patterns:
+          - "kafka-python*"
+        update-types:
+          - minor
+          - patch

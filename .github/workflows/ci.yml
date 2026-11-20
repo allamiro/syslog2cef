@@ -5,6 +5,12 @@ on:
     branches: [ main, master ]
   pull_request:
 
+# Least privilege: no job here writes to the repository, and an explicit
+# block also stops a permissive default at the org or repo level from
+# applying (CodeQL "workflow does not contain permissions").
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

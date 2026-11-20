@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Timestamps without a year are no longer dated into the next year (#112).
+  The year came from a symmetric 180-day window around the current time, so
+  converting a `Jan  1` line in November produced next January. A yearless
+  timestamp now takes its most recent occurrence no more than one day ahead
+  of the current time, which still handles a line stamped just after
+  midnight on New Year's Eve. The built-in parsers, the adaptive parser and
+  custom `--patterns` share the rule, and a yearless Feb 29 resolves to the
+  last leap day in the past rather than the nearest one.
 - COPR builds no longer fail after a version bump. The COPR project builds
   every push to `main` with rpkg, and the spec's `Source0` is the PyPI sdist,
   which does not exist yet when the "Bump version" commit lands on `main`

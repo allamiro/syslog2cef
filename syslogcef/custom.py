@@ -40,12 +40,12 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Union
 
 from .parsers import PARSERS, ParsedEvent
-from .utils import convert_pri, parse_iso8601
+from .utils import convert_pri, latest_past_occurrence, parse_iso8601
 
 _EVENT_GROUPS = {"pri", "host", "app", "pid", "msgid", "msg"}
 _TS_SPECIAL_FORMATS = {"iso8601", "epoch"}
@@ -126,10 +126,10 @@ def _validate_strptime_format(fmt: str) -> bool:
 
 
 def _year_with_rollover(parsed: datetime, ref: datetime) -> datetime:
-    """Assign the most plausible year to a yearless timestamp.
+    """Assign the year to a yearless timestamp, as the built-in parsers do.
 
-    Keeps every parsed component (tz offset, microseconds); handles
-    Feb 29 by picking the nearest leap year when needed.
+    Keeps every parsed component (tz offset, microseconds); see
+    :func:`syslogcef.utils.latest_past_occurrence` for the rule.
     """
 
     def with_year(year: int) -> Optional[datetime]:
@@ -138,19 +138,7 @@ def _year_with_rollover(parsed: datetime, ref: datetime) -> datetime:
         except ValueError:  # Feb 29 in a non-leap year
             return None
 
-    candidate = with_year(ref.year)
-    if candidate is None:
-        # Feb 29: pick the occurrence closest in time, not the first
-        # leap year found in either direction.
-        candidates = [c for off in range(-4, 5) if off and (c := with_year(ref.year + off))]
-        if not candidates:
-            return parsed
-        return min(candidates, key=lambda c: abs(c - ref))
-    if candidate - ref > timedelta(days=180):
-        return with_year(ref.year - 1) or candidate
-    if ref - candidate > timedelta(days=180):
-        return with_year(ref.year + 1) or candidate
-    return candidate
+    return latest_past_occurrence(with_year, ref) or parsed
 
 
 def _parse_timestamp(text: str, fmt: str, *, now: Optional[datetime] = None) -> datetime:

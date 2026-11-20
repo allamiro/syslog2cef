@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-21
+
+This release changes emitted CEF in two ways that downstream SIEM content
+may depend on: Cisco ASA records now carry the raw line in `cs1`, and
+yearless timestamps are dated in the past (see Fixed). Review parsers or
+rules that read ASA `cs1` or that relied on the previous year inference.
+
+### Added
+
+- `CITATION.cff` with software citation metadata, so GitHub offers "Cite
+  this repository"; the README has a matching BibTeX entry and status badges.
+- Per-version Python classifiers (3.9 to 3.14) in the package metadata.
+
 ### Fixed
 
 - Timestamps without a year are no longer dated into the next year (#112).
@@ -387,7 +400,8 @@ Initial release.
 - `--tail` now follows all given input files instead of blocking on the
   first one.
 
-[Unreleased]: https://github.com/allamiro/syslogcef/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/allamiro/syslogcef/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/allamiro/syslogcef/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/allamiro/syslogcef/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/allamiro/syslogcef/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/allamiro/syslogcef/compare/v0.3.0...v0.3.1

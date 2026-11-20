@@ -158,7 +158,7 @@ normalized event's fields:
     "src": "%(src)s",
     "dst": "%(dst)s",
     "cs1Label": "rawEvent",
-    "cs1": "%(raw_kv)s"
+    "cs1": "%(raw)s"
   }
 }
 ```
@@ -168,7 +168,8 @@ normalized event's fields:
 - `severity_map` translates syslog severity (0-7) to CEF severity (0-10);
   unmapped values pass through.
 - `extensions` maps CEF extension keys to templates. Extensions that
-  resolve to an empty value are omitted.
+  resolve to an empty value are omitted, and so is a custom-field label
+  (`cs1Label`, `cn1Label`, ...) whose paired value is omitted.
 - Available template fields include `host`, `app`, `pid`, `msgid`, `msg`,
   `message_short` (first 120 characters), `raw`, `raw_kv`, `event_code`,
   `facility`, `severity`, `ts`, plus every key=value pair extracted from

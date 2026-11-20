@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Any, Dict, Mapping
 
 from .normalizer import NormalizedEvent
@@ -14,6 +15,11 @@ logger = logging.getLogger(__name__)
 HEADER_KEYS = (
     "deviceVendor", "deviceProduct", "deviceVersion", "eventClassId", "name",
 )
+
+# Custom-field labels pair with the key they describe: cs1Label -> cs1.
+# Only the dictionary's own *Label keys pair this way; a custom extension
+# that merely ends in "Label" (classificationLabel) is independent data.
+_LABEL_SUFFIX = "Label"
 
 
 DEFAULT_MAPPING = {
@@ -52,6 +58,19 @@ DEFAULT_MAPPING = {
         "cs1": "%(raw)s",
     },
 }
+
+
+@lru_cache(maxsize=1)
+def _label_pairs() -> Dict[str, str]:
+    """Dictionary custom-field label -> the key it labels (cs1Label -> cs1)."""
+    from .dictionary import cef_keys
+
+    keys = cef_keys()
+    return {
+        key: key[: -len(_LABEL_SUFFIX)]
+        for key in keys
+        if key.endswith(_LABEL_SUFFIX) and key[: -len(_LABEL_SUFFIX)] in keys
+    }
 
 
 @dataclass
@@ -133,6 +152,14 @@ class MappingResolver:
             value = self._format(template, fields)
             if value:
                 raw[key] = str(value)
+        # A label (cs1Label, cn1Label, flexString1Label, ...) is a constant
+        # and always renders, while its paired value is dropped when the
+        # template resolves empty. A label without its value describes
+        # nothing, so drop it too (#111).
+        labels = _label_pairs()
+        for key in [k for k in raw if k in labels]:
+            if labels[key] not in raw:
+                del raw[key]
         return raw
 
     def resolve_extensions(self, fields: Mapping[str, Any]) -> Dict[str, str]:

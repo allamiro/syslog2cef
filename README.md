@@ -26,11 +26,18 @@ platforms that consume CEF.
 
 - Automatic detection and parsing of multiple syslog dialects:
   RFC3164 (BSD), RFC5424 (including structured data), rsyslog JSON and
-  file formats, and systemd journal exports (JSON, short, and ISO formats).
+  file formats, systemd journal exports (JSON, short, and ISO formats),
+  Cisco console/buffer lines, ISO-timestamp syslog, and key=value streams
+  (Fortinet, Sophos). Unknown layouts are learned adaptively.
 - Deterministic vendor/product mappings bundled for Cisco ASA, Cisco IOS,
-  F5 BIG-IP, generic Linux, and VMware ESXi, with automatic mapping
-  selection based on message content.
-- Custom mappings supplied as JSON files or Python dictionaries.
+  F5 BIG-IP, Fortinet FortiGate, Sophos XG Firewall, VMware ESXi, and
+  generic Linux, with automatic mapping selection based on message content.
+- Custom mappings supplied as JSON files or Python dictionaries, and custom
+  parsers supplied as regex pattern files.
+- Validation of CEF extension values against the ArcSight extension
+  dictionary (`--validate`, `--strict`).
+- Network receiver (`--listen udp:514`) and forwarding to UDP, TCP, or
+  Kafka (`--send`), with optional rate limiting.
 - Escaping of untrusted log content in both CEF header and extension
   fields, so crafted messages cannot forge header fields or split records.
 - Streaming CLI with stdin/file input, tail (follow) mode across multiple
@@ -119,12 +126,19 @@ Options:
 | Option | Description |
 | ------ | ----------- |
 | `paths` | Input files; stdin is used when omitted. |
-| `-o, --output FILE` | Write CEF lines to a file instead of stdout. |
-| `--mode MODE` | Parser override: `rfc3164`, `rfc5424`, `rsyslog_json`, `rsyslog_file`, `journald_json`, `journald_short`, `journald_iso`. Auto-detected when omitted. |
+| `-o, --output FILE` | Write CEF lines to a file instead of stdout. Accepts strftime codes for timed files (see "Timed output files"). |
+| `-a, --append` | Append to `--output` instead of truncating it (implied for templated paths). |
+| `--mode MODE` | Parser override: `rfc3164`, `rfc5424`, `rsyslog_json`, `rsyslog_file`, `journald_json`, `journald_short`, `journald_iso`, `cisco_seq`, `iso_syslog`, `kv`, or a name from `--patterns`. Auto-detected when omitted. |
 | `--mapping FILE` | Mapping JSON file. Auto-selected from message content when omitted. |
+| `--patterns FILE` | Custom parser patterns (see "Custom Parsers"); may be repeated. |
 | `--tail` | Follow input files like `tail -f`. |
+| `--listen PROTO:PORT` | Receive syslog over the network instead of files/stdin: `udp:514`, `tcp:5514`, or `udp:10.0.0.5:514`. |
+| `--send URL` | Forward CEF to `udp://HOST:PORT`, `tcp://HOST:PORT`, or `kafka://BROKER:PORT/TOPIC` (needs the `kafka` extra). |
+| `--eps N` | Rate-limit `--send` to at most N events per second. |
 | `--multiprocess` | Convert lines using a process pool. |
 | `--pool-size N` | Worker count for `--multiprocess` (default: CPU count minus one). |
+| `--validate` | Check CEF extensions against the ArcSight dictionary; violations are logged as warnings. |
+| `--strict` | Like `--validate`, but exit with an error on type or length violations. |
 | `--log-level LEVEL` | Python logging level (default `WARNING`). |
 
 `python -m syslogcef` is equivalent to the `syslogcef` entry point.
@@ -151,7 +165,8 @@ cef = to_cef(normalized, mapping="my_mapping.json")
 ```
 
 Bundled mappings are importable from `syslogcef.mappings` (`CISCO_ASA`,
-`CISCO_IOS`, `F5`, `LINUX`, `VMWARE`, or `load_mapping(name)`).
+`CISCO_IOS`, `F5`, `FORTINET`, `LINUX`, `SOPHOS`, `VMWARE`, or
+`load_mapping(name)`).
 
 ## Mapping Files
 

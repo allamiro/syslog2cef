@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+message: "If you use syslog2cef in your work, please cite it as below."
+type: software
+title: "syslog2cef: Convert syslog to ArcSight Common Event Format (CEF)"
+abstract: >-
+  syslog2cef (import package and CLI: syslogcef) is a dependency-free Python
+  package and command line tool that converts syslog events (RFC 3164,
+  RFC 5424, rsyslog, systemd journal and vendor formats) into ArcSight Common
+  Event Format records for SIEM ingestion, with bundled vendor mappings,
+  validation against the ArcSight extension dictionary, and escaping of
+  untrusted log content.
+authors:
+  - family-names: Suliman
+    given-names: Tamir
+version: 0.3.3
+date-released: 2026-08-12
+license: MIT
+repository-code: "https://github.com/allamiro/syslog2cef"
+url: "https://pypi.org/project/syslog2cef/"
+keywords:
+  - syslog
+  - cef
+  - arcsight
+  - siem
+  - logging
+  - security

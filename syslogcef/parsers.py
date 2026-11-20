@@ -12,6 +12,7 @@ from .utils import (
     JournalJSONMapping,
     convert_pri,
     guess_hostname,
+    latest_past_occurrence,
     month_abbr_to_int,
     parse_iso8601,
     parse_key_value_pairs,
@@ -151,20 +152,9 @@ def _infer_timestamp(month: int, day: int, time_str: str, *, now: Optional[datet
         except ValueError:  # Feb 29 in a non-leap year
             return None
 
-    candidate = build(now.year)
+    candidate = latest_past_occurrence(build, now)
     if candidate is None:
-        # A yearless Feb 29 line in a non-leap runtime year must not
-        # crash the parser: pick the occurrence closest in time (not
-        # merely the first leap year found in either direction).
-        candidates = [c for off in range(-4, 5) if off and (c := build(now.year + off))]
-        if not candidates:
-            raise ValueError(f"impossible calendar date: month={month} day={day}")
-        return min(candidates, key=lambda c: abs(c - now))
-    # Handle rollover into previous year.
-    if candidate - now > timedelta(days=180):
-        candidate = build(now.year - 1) or candidate
-    elif now - candidate > timedelta(days=180):
-        candidate = build(now.year + 1) or candidate
+        raise ValueError(f"impossible calendar date: month={month} day={day}")
     return candidate
 
 

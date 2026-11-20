@@ -210,6 +210,18 @@ extension keys fail with a configuration error instead of corrupting a record.
 See [docs/cef_fields.md](docs/cef_fields.md) for the full CEF extension
 dictionary.
 
+## Timestamps without a year
+
+RFC3164, journald short, Cisco console lines and many device formats
+stamp `Jan  1 12:34:56` with no year. syslogcef dates such a timestamp to
+its most recent occurrence that is not more than one day ahead of the
+current time: log lines describe events that already happened. A `Jan 1`
+line converted in November is dated January of the current year, while a
+line stamped just after midnight on New Year's Eve (a sender clock or
+timezone slightly ahead) lands in the new year. Pass `now=` to
+`parse_syslog`/`convert_line` to date archived files relative to when
+they were written.
+
 ## Field Dictionary
 
 `syslogcef/dictionary.json` is the single source of truth for CEF field
@@ -261,9 +273,9 @@ syslogcef acme.log --patterns /etc/syslogcef/patterns.json
 - Named groups map to event fields: `pri`, `host`, `app`, `pid`,
   `msgid`, `msg`, and `ts`.
 - A `ts` group requires `timestamp_format`: a strptime format,
-  `iso8601`, or `epoch`. Yearless formats get the same year-rollover
-  inference as the built-in parsers; an unparseable timestamp never
-  drops the event.
+  `iso8601`, or `epoch`. Yearless formats get the same year inference
+  as the built-in parsers (see "Timestamps without a year" below); an
+  unparseable timestamp never drops the event.
 - `priority` is `"after"` (default: tried after the built-ins, before
   the adaptive fallback) or `"before"` (tried first, overriding
   built-ins).

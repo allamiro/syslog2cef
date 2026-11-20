@@ -5,8 +5,8 @@ import logging
 import re
 import socket
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any, Dict, Mapping, Optional
+from datetime import datetime, timedelta, timezone
+from typing import Any, Callable, Dict, Mapping, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +102,32 @@ def parse_iso8601(value: str) -> datetime:
         return datetime.fromisoformat(value)
     except ValueError as exc:
         raise ValueError(f"Invalid ISO8601 timestamp: {value!r}") from exc
+
+
+# How far ahead of "now" a yearless timestamp may sit and still count as
+# the current occurrence: covers senders in timezones ahead of UTC (up to
+# +14h, since yearless local times are read as UTC) plus modest clock skew.
+YEARLESS_FUTURE_TOLERANCE = timedelta(days=1)
+
+
+def latest_past_occurrence(
+    build: Callable[[int], Optional[datetime]], now: datetime
+) -> Optional[datetime]:
+    """Pick the year for a timestamp that carries none.
+
+    ``build(year)`` returns the timestamp in that year, or ``None`` when the
+    date does not exist then (Feb 29). Logs describe events that already
+    happened, so the answer is the most recent occurrence no later than
+    ``now`` plus :data:`YEARLESS_FUTURE_TOLERANCE`. Next year only wins at
+    the year boundary (a Jan 1 00:00:05 line received at Dec 31 23:59:58).
+    Leap days recur at most eight years apart, which bounds the search.
+    """
+
+    for year in range(now.year + 1, now.year - 9, -1):
+        candidate = build(year)
+        if candidate is not None and candidate - now <= YEARLESS_FUTURE_TOLERANCE:
+            return candidate
+    return None
 
 
 def ensure_tzaware(ts: Optional[datetime]) -> Optional[datetime]:

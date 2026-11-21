@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Tuple
 
 from .dictionary import cef_keys, consumer_keys
+from .utils import month_abbr_to_int
 
 # type tags: str (with max length), int, long, float, port, ip (v4/v6),
 # ipv6, mac, ts (MMM dd yyyy HH:mm:ss or epoch milliseconds)
@@ -28,6 +29,10 @@ CEF_KEYS: Dict[str, Tuple[str, int]] = cef_keys()
 CONSUMER_KEYS = consumer_keys()
 
 MAC_RE = re.compile(r"^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}$")
+# MMM dd yyyy HH:mm:ss, as lenient on field widths as strptime was.
+CEF_DATETIME_RE = re.compile(
+    r"([A-Za-z]{3})\s+(\d{1,2})\s+(\d{4})\s+(\d{1,2}):(\d{1,2}):(\d{1,2})"
+)
 
 
 class CEFValidationError(ValueError):
@@ -99,12 +104,27 @@ def _check(key: str, value: str) -> str | None:
             if 10 <= len(value) <= 19:
                 return None  # epoch seconds through nanoseconds
             return f"epoch timestamp has implausible magnitude: {value!r}"
-        try:
-            datetime.strptime(value, "%b %d %Y %H:%M:%S")
-        except ValueError:
+        if not _is_cef_datetime(value):
             return f"expected 'MMM dd yyyy HH:mm:ss' or epoch milliseconds, got {value!r}"
         return None
     return None
+
+
+def _is_cef_datetime(value: str) -> bool:
+    # Not strptime("%b ..."): %b follows LC_TIME, so a German locale
+    # rejects "Mar"/"May"/"Dec". CEF's MMM is always English.
+    match = CEF_DATETIME_RE.fullmatch(value)
+    if not match:
+        return False
+    month, day, year, hour, minute, second = match.groups()
+    try:
+        datetime(
+            int(year), month_abbr_to_int(month.title()), int(day),
+            int(hour), int(minute), int(second),
+        )
+    except ValueError:
+        return False
+    return True
 
 
 def validate_extensions(extensions: Dict[str, str]) -> List[Finding]:

@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-21
+
+### Upgrade notes
+
+- **Cisco ASA, Cisco IOS and F5 events carry the device's hostname in
+  `dvchost` instead of `shost`.** The syslog header host of these
+  appliances is the reporting device, not the source of the traffic, so
+  CEF's device field is the right place for it (#135). SIEM rules or
+  parsers that read `shost` for these devices must read `dvchost`. A
+  hostname longer than `dvchost`'s 100-character limit stays in `shost`,
+  so no value is lost and `--strict` still accepts it. FortiGate, Sophos,
+  VMware and Linux output is unchanged.
+
+### Added
+
+- Template fields `device_host` (the host when it fits `dvchost`) and
+  `device_host_long` (the host when it is longer), for custom mappings
+  that want the same split. Both are reserved names in pattern files.
+
+### Fixed
+
+- With a forced `--mode`, a line the parser rejects (or that makes a
+  `register_parser()` function raise) no longer stops the stream. The CLI
+  converts it as a raw-message event and logs one warning, then further
+  rejections at DEBUG; `--stats` counts them as unrecognized. A single
+  malformed datagram can no longer stop a `--listen` receiver. Library
+  callers of `StreamConverter` keep the previous behavior (a
+  `ParserError`) unless they pass `on_parse_error="raw"`.
+
 ## [0.5.0] - 2026-11-21
 
 Custom parsers become a short, testable loop: pattern files can capture any
@@ -553,7 +582,8 @@ Initial release.
 - `--tail` now follows all given input files instead of blocking on the
   first one.
 
-[Unreleased]: https://github.com/allamiro/syslog2cef/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/allamiro/syslog2cef/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/allamiro/syslog2cef/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/allamiro/syslog2cef/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/allamiro/syslog2cef/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/allamiro/syslog2cef/compare/v0.4.0...v0.4.1

@@ -34,7 +34,9 @@ Two ways to teach syslogcef a format it does not know (issue #67):
        Unique name; may not shadow a built-in parser. Line pattern names
        are also accepted by ``--mode``.
    ``regex`` (required)
-       The regular expression.
+       The regular expression. ``%{NAME}`` and ``%{NAME:field}`` tokens
+       expand to the shorthands in :mod:`syslogcef.shorthands` (e.g.
+       ``%{IP:src}``); an unknown NAME is a load error.
    ``match``
        ``"line"`` (default) applies the regex to the whole raw line with
        ``re.match``: it is a full parser. ``"msg"`` applies it with
@@ -96,6 +98,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple, Union
 
 from .parsers import PARSERS, ParsedEvent
+from .shorthands import expand as _expand_shorthands
 from .utils import convert_pri, latest_past_occurrence, parse_iso8601
 
 # Groups that fill the ParsedEvent envelope of a line pattern.
@@ -256,11 +259,6 @@ def _parse_timestamp(text: str, fmt: str, *, now: Optional[datetime] = None) -> 
             ref = ref.replace(tzinfo=timezone.utc)
         parsed = _year_with_rollover(parsed, ref)
     return parsed
-
-
-# Replaced by syslogcef.shorthands.expand at integration.
-def _expand_shorthands(src: str) -> str:
-    return src
 
 
 _registered: Dict[str, Callable] = {}

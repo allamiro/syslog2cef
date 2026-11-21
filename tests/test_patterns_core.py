@@ -535,8 +535,59 @@ def test_shorthand_value_error_becomes_pattern_file_error(tmp_path: Path, monkey
         load_patterns(write_patterns(tmp_path, SSHD_FAILED))
 
 
-def test_default_expand_shorthands_is_identity():
-    assert custom._expand_shorthands(r"%{IP:src} (?P<x>\d+)") == r"%{IP:src} (?P<x>\d+)"
+def test_expand_shorthands_is_the_shorthands_module():
+    from syslogcef import shorthands
+
+    assert custom._expand_shorthands is shorthands.expand
+
+
+def test_pattern_file_with_shorthands_loads_and_captures(tmp_path: Path):
+    entry = {
+        "name": "sshd_failed",
+        "match": "msg",
+        "app": "sshd",
+        "regex": "Failed password for %{USER:suser} from %{IP:src} port %{PORT:spt}",
+    }
+    load_patterns(write_patterns(tmp_path, entry))
+
+    event = parse_syslog(SSHD_LINE)
+    assert event.msg_pattern == "sshd_failed"
+    assert event.fields == {"suser": "root", "src": "10.0.0.1", "spt": "2222"}
+
+
+def test_line_pattern_with_shorthands_fills_envelope_and_fields(tmp_path: Path):
+    entry = {
+        "name": "acme_short",
+        "regex": (
+            r"^ACME (?P<ts>%{TIMESTAMP_ISO8601}) %{HOSTNAME:host} %{WORD:app}\[%{INT:pid}\]: "
+            r"%{WORD:action} %{IPV4:src_ip} -> %{IP:dst}%{GREEDYDATA:rest}$"
+        ),
+        "timestamp_format": "%Y-%m-%d %H:%M:%S",
+    }
+    load_patterns(write_patterns(tmp_path, entry))
+
+    event = parse_syslog(ACME_LINE, now=NOW)
+    assert event.pattern == "acme_short"
+    assert (event.host, event.app, event.pid) == ("fw01", "nat", "42")
+    assert event.ts == datetime(2026, 8, 11, 7, 0, 0, tzinfo=timezone.utc)
+    assert event.fields == {"action": "allowed", "src_ip": "10.0.0.1", "dst": "10.0.0.2", "rest": " proto=tcp"}
+    assert normalize_event(event).as_field_dict()["src"] == "10.0.0.1"
+
+
+def test_unknown_shorthand_in_file_names_file_and_pattern(tmp_path: Path):
+    path = write_patterns(tmp_path, dict(SSHD_FAILED, regex="from %{NOPE:src} port"))
+    with pytest.raises(PatternFileError, match=r"unknown shorthand %\{NOPE\}; known: ") as excinfo:
+        load_patterns(path)
+    message = str(excinfo.value)
+    assert str(path) in message
+    assert "pattern 'sshd_failed'" in message
+    assert custom.loaded_patterns() == []
+
+
+def test_shorthand_reserved_capture_name_is_rejected(tmp_path: Path):
+    path = write_patterns(tmp_path, dict(SSHD_FAILED, regex="at %{SYSLOGTIMESTAMP:timestamp}"))
+    with pytest.raises(PatternFileError, match="reserved for derived fields"):
+        load_patterns(path)
 
 
 # --- load errors -----------------------------------------------------------

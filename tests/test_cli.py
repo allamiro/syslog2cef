@@ -4,6 +4,23 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _checkout_file(relpath: str) -> Path:
+    """Return a repository file, skipping when it is not in this tree.
+
+    The RPM %check runs the suite from the PyPI sdist, which ships the
+    package and tests but not the CHANGELOG, packaging files or keys.
+    Tests about those files only make sense in a git checkout.
+    """
+    path = REPO_ROOT / relpath
+    if not path.exists():
+        pytest.skip(f"{relpath} is not in this source tree")
+    return path
+
 
 def test_cli_stdout(tmp_path: Path):
     sample = "<166>Jan  1 12:34:56 router1 %ASA-6-302013: Built inbound TCP connection src=10.0.0.1 dst=10.0.0.2\n"
@@ -194,11 +211,7 @@ def test_cli_reports_the_command_name_not_the_module_file():
 def test_man_page_source_field_names_the_project():
     # The third .TH field is the source package, which is syslog2cef; the
     # page name stays SYSLOGCEF because that is the command.
-    from pathlib import Path
-
-    first = Path(__file__).resolve().parent.parent.joinpath(
-        "packaging/rpm/syslogcef.1"
-    ).read_text().splitlines()[0]
+    first = _checkout_file("packaging/rpm/syslogcef.1").read_text().splitlines()[0]
     assert first.startswith(".TH SYSLOGCEF 1 ")
     assert '"syslog2cef ' in first
 
@@ -210,24 +223,21 @@ def test_external_resource_names_are_not_renamed():
     signing keys, and a blanket search-and-replace across the docs silently
     turns those into dead references.
     """
-    from pathlib import Path
-
-    root = Path(__file__).resolve().parent.parent
-    readme = root.joinpath("README.md").read_text()
+    rpm_key = _checkout_file("packaging/rpm/RPM-GPG-KEY-syslogcef")
+    apk_key = _checkout_file("packaging/apk/syslogcef.rsa.pub")
+    readme = _checkout_file("README.md").read_text()
     assert "copr.fedorainfracloud.org/coprs/allamiro/syslogcef/" in readme
     assert "dnf copr enable allamiro/syslogcef" in readme
     # No COPR reference may point at the non-existent renamed project.
     assert "coprs/allamiro/syslog2cef" not in readme
     assert "copr enable allamiro/syslog2cef" not in readme
-    assert root.joinpath("packaging/rpm/RPM-GPG-KEY-syslogcef").exists()
-    assert root.joinpath("packaging/apk/syslogcef.rsa.pub").exists()
+    assert rpm_key.is_file()
+    assert apk_key.is_file()
 
 
 def test_changelog_history_is_not_rewritten():
     # Entries predating 0.4.1 must keep the names that were true then.
-    from pathlib import Path
-
-    text = Path(__file__).resolve().parent.parent.joinpath("CHANGELOG.md").read_text()
+    text = _checkout_file("CHANGELOG.md").read_text()
     history = text.split("## [0.4.0]", 1)[1]
     assert "ghcr.io/allamiro/syslogcef" in history
     assert "`allamiro/syslogcef`" in history

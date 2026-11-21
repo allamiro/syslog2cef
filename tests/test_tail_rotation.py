@@ -244,3 +244,26 @@ def test_plain_append_still_works(tmp_path: Path):
     with log.open("a", encoding="utf-8") as fp:
         fp.write("y\n")
     assert "y" in drain(gen)
+
+
+def test_copy_truncate_during_poll_sleep_is_not_read_from_stale_offset(tmp_path: Path, monkeypatch):
+    # Review on #93: the rewrite lands between polls and regrows past the
+    # old offset. Reading before the rotation check would resume at the
+    # stale offset (skipping the rewritten head) and then refresh the
+    # fingerprint from the new head, so the rewrite is never detected.
+    import syslogcef.cli as cli
+
+    log = tmp_path / "app.log"
+    log.write_text("old-1\nold-2\n", encoding="utf-8")
+
+    def copytruncate_during_sleep(_seconds):
+        if log.stat().st_size == len("old-1\nold-2\n"):
+            with log.open("r+", encoding="utf-8") as fp:
+                fp.truncate(0)
+                fp.write("new-1\nnew-2\nnew-3\n")
+
+    monkeypatch.setattr(cli.time, "sleep", copytruncate_during_sleep)
+
+    lines = drain(follow_files([log], poll_interval=0, max_idle_polls=3))
+
+    assert lines == ["old-1", "old-2", "new-1", "new-2", "new-3"]

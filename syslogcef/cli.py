@@ -118,8 +118,7 @@ class _Follower:
 
     def check_rotation(self) -> bool:
         """Reattach after rotation events. Returns True if a replacement
-        file was (re)opened, so the caller can read it before treating
-        the poll as idle.
+        file was (re)opened or the file was rewound.
 
         Runs every pass, not only when idle: a file that is renamed away
         while still being written keeps this follower producing from the
@@ -167,8 +166,6 @@ class _Follower:
         if rewound:
             self.handle.seek(0)
             self.fp_len, self.fingerprint = 0, b""
-        # A rewind exposes fresh content that must be read before the idle
-        # limit applies, so report it as activity like a reopen.
         return rewound
 
     def close(self) -> None:
@@ -208,6 +205,15 @@ def follow_files(
         while True:
             any_line = False
             for follower in followers:
+                # Rotation is checked for every follower on every pass —
+                # including busy ones — so a file renamed away while still
+                # being written cannot pin this follower to the stale
+                # descriptor and starve the replacement at the origin path.
+                # It runs before the read: a copy-truncate that happened
+                # during the sleep and regrew past our offset must be
+                # detected before reading resumes at the stale offset and
+                # refreshes the fingerprint from the rewritten head.
+                follower.check_rotation()
                 source = str(follower.path)
                 # Bounded per pass: a file that is written as fast as we
                 # read never reaches EOF and would otherwise starve the
@@ -215,18 +221,7 @@ def follow_files(
                 for line in follower.read_lines(limit=_LINES_PER_PASS):
                     any_line = True
                     yield (source, line) if tag_sources else line
-            # Rotation is checked for every follower on every pass —
-            # including busy ones — so a file renamed away while still
-            # being written cannot pin this follower to the stale
-            # descriptor and starve the replacement at the origin path.
-            reopened = False
-            for follower in followers:
-                if follower.check_rotation():
-                    reopened = True
-            # A reopened replacement must be read before the idle limit
-            # applies, so treat a reopen as activity: loop again to read
-            # it rather than counting this pass as idle.
-            if any_line or reopened:
+            if any_line:
                 idle_polls = 0
                 continue
             idle_polls += 1

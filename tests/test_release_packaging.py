@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import stat
 import subprocess
 from pathlib import Path
 
@@ -107,3 +108,68 @@ def test_dependabot_gate_holds_every_major_update(tmp_path, update_type, expecte
     )
     subprocess.run(["bash", "-c", script], env=env, check=True)
     assert output.read_text().splitlines()[0] == expected
+
+
+# --- Debian maintainer scripts -------------------------------------------
+
+
+def _write_stub(directory: Path, name: str, body: str) -> None:
+    path = directory / name
+    path.write_text("#!/bin/sh\n" + body)
+    path.chmod(path.stat().st_mode | stat.S_IXUSR)
+
+
+@pytest.fixture
+def deb_tree(tmp_path):
+    """Stage the .deb with build-deb.sh, keeping the tree instead of packing it."""
+    script = _checkout_file("packaging/debian/build-deb.sh")
+    if shutil.which("bash") is None or shutil.which("gzip") is None:
+        pytest.skip("bash and gzip are required")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    # dpkg-deb --build --root-owner-group <stage> <out.deb>
+    _write_stub(bin_dir, "dpkg-deb", 'cp -R "$3" "$4"\n')
+    pyz = tmp_path / "syslog2cef.pyz"
+    pyz.write_text("")
+    out = tmp_path / "out"
+    env = dict(os.environ, PATH=f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    subprocess.run(["bash", str(script), "9.9.9", str(pyz), str(out)], env=env, check=True)
+    return out / "syslog2cef_9.9.9-1_all.deb"
+
+
+def _run_maintainer_script(tree: Path, name: str, args, tmp_path: Path) -> list[str]:
+    """Run a maintainer script against stub systemctl/sysusers on a systemd host."""
+    bin_dir = tmp_path / "maint-bin"
+    bin_dir.mkdir(exist_ok=True)
+    log = tmp_path / "systemctl.log"
+    log.write_text("")
+    _write_stub(bin_dir, "systemctl", f'echo "$*" >> "{log}"\n')
+    _write_stub(bin_dir, "systemd-sysusers", "exit 0\n")
+    systemd_dir = tmp_path / "run-systemd-system"
+    systemd_dir.mkdir(exist_ok=True)
+    source = (tree / "DEBIAN" / name).read_text()
+    assert "/run/systemd/system" in source
+    patched = tmp_path / name
+    patched.write_text(source.replace("/run/systemd/system", str(systemd_dir)))
+    env = dict(os.environ, PATH=f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    subprocess.run(["sh", str(patched), *args], env=env, check=True)
+    return log.read_text().splitlines()
+
+
+def test_deb_upgrade_restarts_running_services(deb_tree, tmp_path):
+    # dpkg runs the old prerm with "upgrade" (which leaves the service
+    # running) and then the new postinst with "configure <old-version>".
+    # Without a restart the daemon keeps executing the replaced zipapp.
+    calls = _run_maintainer_script(deb_tree, "postinst", ["configure", "0.4.1-1"], tmp_path)
+    assert "daemon-reload" in calls
+    restarts = [c for c in calls if c.startswith("try-restart")]
+    assert restarts, calls
+    assert "syslogcef.service" in restarts[0].split()
+    assert "syslogcef@*.service" in restarts[0].split()
+    # The restart must come after systemd has re-read the new unit files.
+    assert calls.index("daemon-reload") < calls.index(restarts[0])
+
+
+def test_deb_fresh_install_does_not_start_the_service(deb_tree, tmp_path):
+    calls = _run_maintainer_script(deb_tree, "postinst", ["configure"], tmp_path)
+    assert not [c for c in calls if "start" in c], calls

@@ -193,6 +193,115 @@ def test_stats_printed_when_tail_is_interrupted(tmp_path: Path):
 
     assert err.startswith("syslogcef: 2 lines\n  by parser:\n")
     assert "  unmatched (adaptive or unknown): 1\n    " + ADAPTIVE + "\n" in err
+    # Ctrl-C is the normal way to stop --tail: no traceback, status 130.
+    assert "Traceback" not in err
+    assert "KeyboardInterrupt" not in err
+    assert err.endswith("    " + ADAPTIVE + "\n")
+    assert proc.returncode == 130
+
+
+def _interrupt_after_lines(argv, count: int, *, feed=None, cwd=REPO_ROOT):
+    """Start the CLI, wait for *count* stdout lines, send SIGINT, return (out, err, status).
+
+    *feed* is called repeatedly until the first line arrives (e.g. to send
+    a datagram to a listener that may not be bound yet).
+    """
+    import select
+    import time
+
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "syslogcef", *argv],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        cwd=cwd,
+    )
+    lines = []
+    try:
+        deadline = time.monotonic() + 20
+        while len(lines) < count:
+            assert time.monotonic() < deadline, "no output from syslogcef"
+            if feed is not None and not lines:
+                feed()
+            ready, _, _ = select.select([proc.stdout], [], [], 0.2)
+            if ready:
+                line = proc.stdout.readline()
+                assert line, "syslogcef exited early"
+                lines.append(line)
+        proc.send_signal(signal.SIGINT)
+        out, err = proc.communicate(timeout=10)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.communicate()
+    return "".join(lines) + out, err, proc.returncode
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="needs SIGINT delivery")
+def test_tail_interrupt_exits_130_without_traceback(tmp_path: Path):
+    log = tmp_path / "in.log"
+    log.write_text(RFC3164 + "\n", encoding="utf-8")
+
+    out, err, status = _interrupt_after_lines(["--tail", str(log)], 1)
+
+    assert out.startswith("CEF:0|")
+    assert err == ""
+    assert status == 130
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="needs SIGINT delivery")
+def test_multiprocess_interrupt_exits_130_without_worker_tracebacks(tmp_path: Path):
+    log = tmp_path / "big.log"
+    log.write_text((RFC3164 + "\n") * 200000, encoding="utf-8")
+
+    out, err, status = _interrupt_after_lines(["--multiprocess", "--pool-size", "2", str(log)], 1)
+
+    assert out.startswith("CEF:0|")
+    assert "Traceback" not in err
+    assert "KeyboardInterrupt" not in err
+    assert status == 130
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="needs SIGINT delivery")
+def test_listen_interrupt_prints_stats_and_exits_130():
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+    def feed():
+        sender.sendto(RFC3164.encode("utf-8"), ("127.0.0.1", port))
+
+    try:
+        out, err, status = _interrupt_after_lines(["--listen", f"udp:127.0.0.1:{port}", "--stats"], 1, feed=feed)
+    finally:
+        sender.close()
+
+    assert out.startswith("CEF:0|")
+    assert err.startswith("syslogcef: ")
+    assert "  by parser:\n    rfc3164  " in err
+    assert "Traceback" not in err
+    assert "KeyboardInterrupt" not in err
+    assert status == 130
+
+
+def test_keyboard_interrupt_in_main_returns_130(monkeypatch, capsys):
+    from syslogcef import cli
+
+    def interrupted(lines, **kwargs):
+        yield StreamConverter().convert(RFC3164)
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cli, "process_lines", interrupted)
+    monkeypatch.setattr("sys.stdin", __import__("io").StringIO(RFC3164 + "\n"))
+
+    assert cli.main(["--stats"]) == 130
+    captured = capsys.readouterr()
+    assert captured.out.startswith("CEF:0|")
+    # The stats summary is still printed (empty here: the stub bypasses counting).
+    assert captured.err.startswith("syslogcef: 0 lines\n")
 
 
 def test_stats_rejected_with_multiprocess():

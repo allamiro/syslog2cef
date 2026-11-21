@@ -52,6 +52,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--check-patterns` reports it as a failure (`FAIL <pattern> config:
   unknown key 'exmaples'`) and exits 1.
 
+### Fixed
+
+- Ctrl-C (SIGINT) now stops a run, typically `--tail` or `--listen`, with
+  exit status 130 instead of a `KeyboardInterrupt` traceback.
+
 ## [0.4.2] - 2026-11-21
 
 Completes the 0.4.1 release. 0.4.1 reached PyPI and the container

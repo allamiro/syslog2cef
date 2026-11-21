@@ -392,6 +392,15 @@ failed or an unknown key was found under
 .B 2
 Invalid command-line arguments, or a pattern or mapping file failed
 validation.
+.TP
+.B 130
+Interrupted (SIGINT, for example Ctrl\-C, the usual way to stop
+.B \-\-tail
+or
+.BR \-\-listen ).
+Output written so far is flushed and any
+.B \-\-stats
+summary is printed first.
 .SH EXAMPLES
 Convert a log file to CEF on standard output:
 .PP

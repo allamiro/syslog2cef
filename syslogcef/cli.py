@@ -329,15 +329,20 @@ def _convert_line_mp(line: str, mode: Optional[str], mapping: Any, validate: boo
 
 
 def _mp_load_patterns(pattern_files: list) -> None:
+    import signal
+
+    from .custom import clear_registry, load_patterns
+
+    # Ctrl-C reaches the whole process group; the parent handles it and
+    # tears the pool down, so workers must not print tracebacks of their own.
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    # The parent already logged any pattern file warnings at startup;
+    # don't repeat them once per worker.
+    logging.getLogger("syslogcef.custom").setLevel(logging.ERROR)
     # Reload pattern files in each pool worker so --patterns works with
     # --multiprocess. Clear first: under the fork start method workers
     # inherit the parent's already-populated registry, and reloading into
     # it would fail every worker with duplicate-name errors.
-    from .custom import clear_registry, load_patterns
-
-    # The parent already logged any pattern file warnings at startup;
-    # don't repeat them once per worker.
-    logging.getLogger("syslogcef.custom").setLevel(logging.ERROR)
     clear_registry()
     for path in pattern_files:
         load_patterns(path)
@@ -422,7 +427,24 @@ VERSION_TEXT = (
 )
 
 
+# Exit status for a run stopped with Ctrl-C (SIGINT), as shells report it.
+EXIT_INTERRUPTED = 130
+
+
 def main(argv: Optional[list[str]] = None) -> int:
+    """Run the command line; returns the exit status.
+
+    Ctrl-C (KeyboardInterrupt) ends ``--tail`` and ``--listen`` runs, so
+    it exits with status 130 and no traceback. Any ``--stats`` summary is
+    printed before that, while the interrupt unwinds the conversion loop.
+    """
+    try:
+        return _main(argv)
+    except KeyboardInterrupt:
+        return EXIT_INTERRUPTED
+
+
+def _main(argv: Optional[list[str]] = None) -> int:
     # prog is explicit so "python -m syslogcef --help" reports the command
     # name rather than "__main__.py". RawDescriptionHelpFormatter keeps
     # VERSION_TEXT's line breaks; argparse otherwise reflows the version

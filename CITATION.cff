@@ -12,7 +12,7 @@ abstract: >-
 authors:
   - family-names: Suliman
     given-names: Tamir
-version: 0.5.0
+version: 0.6.0
 date-released: 2026-11-21
 license: MIT
 repository-code: "https://github.com/allamiro/syslog2cef"

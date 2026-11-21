@@ -1,5 +1,5 @@
 Name:           syslog2cef
-Version:        0.5.0
+Version:        0.6.0
 Release:        1%{?dist}
 Summary:        Convert syslog events to ArcSight CEF
 
@@ -109,6 +109,11 @@ install -D -m 0644 %{SOURCE7} %{buildroot}%{_sysusersdir}/syslogcef.conf
 %ghost %dir %attr(0755,root,root) %{_localstatedir}/log/syslogcef
 
 %changelog
+* Sat Nov 21 2026 Tamir Suliman <allamiro@gmail.com> - 0.6.0-1
+- Cisco ASA, IOS and F5 report the device hostname as dvchost
+- A line a forced --mode rejects is converted as a raw-message event
+  instead of stopping the stream
+
 * Sat Nov 21 2026 Tamir Suliman <allamiro@gmail.com> - 0.5.0-1
 - Pattern files: captured fields reach mappings, msg patterns with an app
   filter, %%{NAME} shorthands, per-pattern mappings and examples

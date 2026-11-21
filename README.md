@@ -42,10 +42,11 @@ platforms that consume CEF.
   fields, so crafted messages cannot forge header fields or split records.
 - Streaming CLI with stdin/file input, tail (follow) mode across multiple
   files, optional multiprocessing, and no runtime dependencies.
-- With format auto-detection (the default), malformed lines never abort a
-  stream: unparseable input falls back to a raw-message event. A forced
-  `--mode` instead stops with an error at the first line that parser
-  rejects.
+- Malformed lines never abort a stream. With format auto-detection (the
+  default), unparseable input falls back to a raw-message event. With a
+  forced `--mode`, a line the parser rejects is still converted as a
+  raw-message event and a warning is logged to stderr for the first such
+  line (later ones at DEBUG).
 
 ## Installation
 

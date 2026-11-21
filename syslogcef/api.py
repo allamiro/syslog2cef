@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping, Optional, Tuple
 
 from .parsers import ParsedEvent, ParserError, autodetect_and_parse
 from .normalizer import NormalizedEvent, normalize
@@ -278,6 +278,12 @@ class StreamConverter:
         self._contexts: dict[str, ParsedEvent] = {}
 
     def convert(self, line: str, *, now: Optional[datetime] = None, source: str = "") -> str:
+        return self.convert_event(line, now=now, source=source)[0]
+
+    def convert_event(
+        self, line: str, *, now: Optional[datetime] = None, source: str = ""
+    ) -> Tuple[str, NormalizedEvent]:
+        """Like :meth:`convert`, but also return the normalized event."""
         ctx = self._contexts.get(source)
         is_continuation = line[:1] in ("\t", " ") and ctx is not None
         try:
@@ -319,7 +325,8 @@ class StreamConverter:
             # guessed fallback) may become continuation context.
             self._contexts[source] = parsed
         normalized = normalize_event(parsed)
-        return to_cef(normalized, self.mapping, validate=self.validate, strict=self.strict)
+        cef = to_cef(normalized, self.mapping, validate=self.validate, strict=self.strict)
+        return cef, normalized
 
 
 def _guess_mapping(event: NormalizedEvent) -> Mapping[str, Any]:

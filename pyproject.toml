@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "syslog2cef"
-version = "0.4.0"
+version = "0.4.1"
 description = "Convert RFC3164/RFC5424 syslog lines into ArcSight CEF"
 authors = [{name = "Tamir Suliman", email = "allamiro@gmail.com"}]
 readme = "README.md"
@@ -25,8 +25,8 @@ keywords = ["syslog", "cef", "logging", "security"]
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/allamiro/syslogcef"
-Issues = "https://github.com/allamiro/syslogcef/issues"
+Homepage = "https://github.com/allamiro/syslog2cef"
+Issues = "https://github.com/allamiro/syslog2cef/issues"
 
 [project.optional-dependencies]
 test = [

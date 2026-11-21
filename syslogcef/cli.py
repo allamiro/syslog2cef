@@ -396,10 +396,12 @@ VERSION_TEXT = (
 
 
 def main(argv: Optional[list[str]] = None) -> int:
-    # RawDescriptionHelpFormatter keeps VERSION_TEXT's line breaks; argparse
-    # otherwise reflows the version string onto one line. Option help is
-    # still wrapped as before.
+    # prog is explicit so "python -m syslogcef --help" reports the command
+    # name rather than "__main__.py". RawDescriptionHelpFormatter keeps
+    # VERSION_TEXT's line breaks; argparse otherwise reflows the version
+    # string onto one line. Option help is still wrapped as before.
     parser = argparse.ArgumentParser(
+        prog="syslogcef",
         description="Convert syslog lines to ArcSight CEF",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )

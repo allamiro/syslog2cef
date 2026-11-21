@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-21
+
+Custom parsers become a short, testable loop: pattern files can capture any
+field, match just the message, use regex shorthands, choose a mapping and
+carry their own examples, and `--explain`, `--stats` and `--check-patterns`
+show what happened to each line. Existing pattern files and normal CEF
+output are unchanged, with one exception noted under Fixed: KV and Cisco
+records that name an unambiguous timezone (`timezone="CEST"`,
+`04:00:47 PST`) are now dated in that zone, so their `rt` moves by the
+offset compared with 0.4.x.
+
 ### Added
 
 - Msg patterns: a pattern with `"match": "msg"` is applied to the message of
@@ -56,6 +67,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Ctrl-C (SIGINT) now stops a run, typically `--tail` or `--listen`, with
   exit status 130 instead of a `KeyboardInterrupt` traceback.
+- An `app`-filtered msg pattern is chosen after a continuation line inherits
+  its app, in load order, so it applies exactly as on a normal line.
+- `%{IPV6}` and `%{IP}` capture IPv4-mapped addresses (`::ffff:192.0.2.1`)
+  whole.
+- `--tail` reads at most 100 lines per file per pass, so one busy file no
+  longer starves the others; holds a half-written line until its newline
+  arrives instead of emitting it as two events; and checks for a
+  copy-truncate before each read, so the rewritten start of a file is no
+  longer skipped.
+- `--listen tcp` no longer closes a connection as idle while records it sent
+  are still waiting to be read.
+- `--multiprocess` keeps parsers registered with `register_parser()` in the
+  worker processes, including one that replaces a file pattern's name.
+  `register_parser(..., replace=True)` also removes the replaced pattern from
+  auto-detection.
+- A pattern `timestamp_format` containing a literal `%%Y` gets the inferred
+  year instead of 1900.
+- Cisco timestamp fractions longer than three digits no longer lose a
+  microsecond.
+- Invalid numeric KV timezone offsets (`tz=-1260`, `tz=+00:99`) are ignored
+  instead of being silently normalized. Named zones in KV records and Cisco
+  timestamps are applied when unambiguous; CST, IST, BST and AST stay
+  unresolved.
+- `--strict` timestamp validation no longer rejects English month names
+  under a non-English locale.
+- A plain `event_code=` field no longer routes a line to the Cisco IOS
+  mapping or sets its severity; only a `%FAC-SEV-MNEMONIC` code does.
+- `dvcpid` is emitted for a numeric key=value `pid=` when the header has no
+  PID.
+- A mapping template that cannot render an event logs one warning, then
+  debug messages, instead of a warning per event.
+- The Debian package restarts running `syslogcef` and `syslogcef@*` services
+  on upgrade, so they run the new version.
+- Releases publish the container image and PyPI only after every package
+  build has succeeded, and the GitHub release waits for the image.
+- Documentation: the "never aborts" guarantee applies to auto-detection (a
+  forced `--mode` stops at the first line it rejects); header CR/LF are
+  replaced with spaces; RPM signatures are embedded (no `.asc`); the man
+  page's logrotate and `--mapping` text, the demo and the CEF 0.1 IPv4-only
+  rule are corrected.
 
 ## [0.4.2] - 2026-11-21
 
@@ -502,7 +553,8 @@ Initial release.
 - `--tail` now follows all given input files instead of blocking on the
   first one.
 
-[Unreleased]: https://github.com/allamiro/syslog2cef/compare/v0.4.2...HEAD
+[Unreleased]: https://github.com/allamiro/syslog2cef/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/allamiro/syslog2cef/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/allamiro/syslog2cef/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/allamiro/syslog2cef/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/allamiro/syslog2cef/compare/v0.3.3...v0.4.0

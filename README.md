@@ -449,7 +449,7 @@ repository" button produces APA and BibTeX from it.
 @software{suliman_syslog2cef,
   author  = {Suliman, Tamir},
   title   = {syslog2cef: Convert syslog to ArcSight Common Event Format (CEF)},
-  version = {0.4.2},
+  version = {0.5.0},
   year    = {2026},
   url     = {https://github.com/allamiro/syslog2cef},
   license = {MIT}

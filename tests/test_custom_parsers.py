@@ -307,3 +307,105 @@ def test_yearless_pattern_timestamp_is_dated_in_the_past(tmp_path: Path):
 
     new_years_eve = datetime(2026, 12, 31, 23, 59, 58, tzinfo=timezone.utc)
     assert parse("P Jan 01 00:00:05 x", now=new_years_eve).ts.year == 2027
+
+
+def _parse_marker(line):
+    # Module level so a pool worker can find it by reference.
+    from syslogcef.parsers import ParsedEvent
+
+    if not line.startswith("MARK "):
+        return None
+    return ParsedEvent(
+        pri=None, facility=None, severity=None, ts=None, ts_orig="",
+        host="marker", app=None, pid=None, msgid=None,
+        msg=line[5:], raw=line, source_hint="custom:marker",
+    )
+
+
+def test_mp_load_patterns_keeps_programmatic_parsers(tmp_path: Path):
+    # Review on #72: a worker reloads --patterns files, but must not lose
+    # parsers a wrapper registered with register_parser().
+    from syslogcef.cli import _mp_load_patterns
+
+    register_parser("marker", _parse_marker)
+    pattern_file = write_patterns(tmp_path, ACME)
+    load_patterns(pattern_file)
+
+    _mp_load_patterns([str(pattern_file)])  # as a fork-started worker does
+
+    assert custom.get_registered("marker") is _parse_marker
+    assert parse_syslog("ACME 2026-08-11 07:00:00 fw01 nat[42]: ok", mode="acme_fw").source_hint == "custom:acme_fw"
+
+
+def test_mp_reload_keeps_a_register_parser_override_of_a_file_pattern(tmp_path: Path):
+    # Review on #130: a wrapper loads a pattern file, then overrides one of
+    # its names with register_parser(..., replace=True). A fork-started
+    # worker reloading the file must keep the override instead of failing
+    # with "duplicate name" (which made the pool hang).
+    from syslogcef.cli import _mp_load_patterns
+
+    pattern_file = write_patterns(tmp_path, ACME)
+    load_patterns(pattern_file)
+    register_parser("acme_fw", _parse_marker, replace=True)
+
+    _mp_load_patterns([str(pattern_file)])  # as a fork-started worker does
+
+    assert custom.get_registered("acme_fw") is _parse_marker
+    line = "ACME 2026-08-11 07:00:00 fw01 nat[42]: ok"
+    # The file's regex stays out of auto-detection, as before the reload.
+    assert parse_syslog(line).source_hint != "custom:acme_fw"
+    # Reloading again (a second worker, or a pool restart) still works.
+    _mp_load_patterns([str(pattern_file)])
+    assert custom.get_registered("acme_fw") is _parse_marker
+
+
+def test_multiprocess_runs_a_programmatic_parser_mode(tmp_path: Path, monkeypatch):
+    import multiprocessing
+
+    from syslogcef import cli
+
+    if "fork" not in multiprocessing.get_all_start_methods():
+        pytest.skip("needs the fork start method")
+    # Fork, so workers inherit the parent's registration as they do by
+    # default on Linux before Python 3.14.
+    monkeypatch.setattr(cli, "Pool", multiprocessing.get_context("fork").Pool)
+    register_parser("marker", _parse_marker)
+    pattern_file = write_patterns(tmp_path, ACME)
+    load_patterns(pattern_file)
+
+    out = list(
+        cli.process_lines(
+            ["MARK hello"], mode="marker", mapping=None,
+            use_multiprocessing=True, pool_size=1, pattern_files=[str(pattern_file)],
+        )
+    )
+
+    assert len(out) == 1 and "shost=marker" in out[0]
+
+
+def test_replacing_a_loaded_pattern_removes_it_from_auto_detection(tmp_path: Path):
+    # Review on #72: after register_parser(..., replace=True) the old
+    # regex must not keep running under the same name in auto-detection.
+    load_patterns(write_patterns(tmp_path, dict(ACME, priority="before")))
+
+    register_parser("acme_fw", _parse_marker, replace=True)
+
+    event = parse_syslog("ACME 2026-08-11 07:00:00 fw01 nat[42]: allowed tcp")
+    assert event.source_hint != "custom:acme_fw"
+    assert parse_syslog("MARK hi", mode="acme_fw").host == "marker"
+
+
+def test_escaped_percent_is_not_a_year_directive(tmp_path: Path):
+    # Review on #72: "%%Y" is a literal "%Y", so the format has no year and
+    # the year must be inferred instead of left at strptime's 1900.
+    load_patterns(
+        write_patterns(
+            tmp_path,
+            {"name": "literal", "regex": r"^L (?P<ts>%Y-\d{2}-\d{2}) (?P<msg>.*)$", "timestamp_format": "%%Y-%m-%d"},
+        )
+    )
+    parse = custom.get_registered("literal")
+
+    event = parse("L %Y-08-11 hello", now=datetime(2026, 11, 20, tzinfo=timezone.utc))
+
+    assert event.ts == datetime(2026, 8, 11, tzinfo=timezone.utc)

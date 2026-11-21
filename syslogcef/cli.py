@@ -71,6 +71,8 @@ class _Follower:
         self.fp_len = 0
         self.fingerprint = b""
         self.pending = deque()
+        # Start of a line whose newline has not been written yet.
+        self.partial = ""
 
     def _fsignature(self):
         import os
@@ -96,24 +98,35 @@ class _Follower:
         self.fp_len = min(self._FINGERPRINT_LEN, self.handle.tell())
         self.fingerprint = self._read_head(self.fp_len)
 
-    def read_lines(self) -> Iterator[str]:
-        while self.pending:
+    def read_lines(self, limit: Optional[int] = None) -> Iterator[str]:
+        """Yield available lines, at most ``limit`` of them when given."""
+        count = 0
+        while self.pending and (limit is None or count < limit):
+            count += 1
             yield self.pending.popleft()
         if self.handle is None:
             return
-        while True:
-            line = self.handle.readline()
-            if not line:
-                # At EOF: record the consumed-head fingerprint so the next
-                # rotation check can tell an append from an in-place rewrite.
-                self._capture_fingerprint()
-                return
+        while limit is None or count < limit:
+            chunk = self.handle.readline()
+            if not chunk:
+                break
+            if not chunk.endswith("\n"):
+                # The writer is mid-line: hold the fragment until the
+                # newline arrives instead of emitting the line in pieces.
+                self.partial += chunk
+                break
+            line, self.partial = self.partial + chunk, ""
+            count += 1
             yield line.rstrip("\n")
+        # Record the consumed-head fingerprint so the next rotation check
+        # can tell an append from an in-place rewrite. Also done when the
+        # limit stops us short of EOF, so a file that never goes idle still
+        # gets one.
+        self._capture_fingerprint()
 
     def check_rotation(self) -> bool:
         """Reattach after rotation events. Returns True if a replacement
-        file was (re)opened, so the caller can read it before treating
-        the poll as idle.
+        file was (re)opened or the file was rewound.
 
         Runs every pass, not only when idle: a file that is renamed away
         while still being written keeps this follower producing from the
@@ -142,7 +155,13 @@ class _Follower:
             return False
         if (st.st_dev, st.st_ino) != self.signature:
             for line in self.handle:
-                self.pending.append(line.rstrip("\n"))
+                self.pending.append((self.partial + line).rstrip("\n"))
+                self.partial = ""
+            # The old file is finished, so an unterminated last line is
+            # as complete as it will get.
+            if self.partial:
+                self.pending.append(self.partial)
+                self.partial = ""
             self.handle.close()
             self.handle = None
             return self.check_rotation()  # open the replacement immediately
@@ -159,16 +178,22 @@ class _Follower:
             elif self.fp_len and self._read_head(self.fp_len) != self.fingerprint:
                 rewound = True
         if rewound:
+            # The rest of a held fragment went to the rotated copy; emit
+            # what we have rather than drop it.
+            if self.partial:
+                self.pending.append(self.partial)
+                self.partial = ""
             self.handle.seek(0)
             self.fp_len, self.fingerprint = 0, b""
-        # A rewind exposes fresh content that must be read before the idle
-        # limit applies, so report it as activity like a reopen.
         return rewound
 
     def close(self) -> None:
         if self.handle is not None:
             self.handle.close()
             self.handle = None
+
+
+_LINES_PER_PASS = 100
 
 
 def follow_files(
@@ -199,22 +224,23 @@ def follow_files(
         while True:
             any_line = False
             for follower in followers:
+                # Rotation is checked for every follower on every pass —
+                # including busy ones — so a file renamed away while still
+                # being written cannot pin this follower to the stale
+                # descriptor and starve the replacement at the origin path.
+                # It runs before the read: a copy-truncate that happened
+                # during the sleep and regrew past our offset must be
+                # detected before reading resumes at the stale offset and
+                # refreshes the fingerprint from the rewritten head.
+                follower.check_rotation()
                 source = str(follower.path)
-                for line in follower.read_lines():
+                # Bounded per pass: a file that is written as fast as we
+                # read never reaches EOF and would otherwise starve the
+                # files after it.
+                for line in follower.read_lines(limit=_LINES_PER_PASS):
                     any_line = True
                     yield (source, line) if tag_sources else line
-            # Rotation is checked for every follower on every pass —
-            # including busy ones — so a file renamed away while still
-            # being written cannot pin this follower to the stale
-            # descriptor and starve the replacement at the origin path.
-            reopened = False
-            for follower in followers:
-                if follower.check_rotation():
-                    reopened = True
-            # A reopened replacement must be read before the idle limit
-            # applies, so treat a reopen as activity: loop again to read
-            # it rather than counting this pass as idle.
-            if any_line or reopened:
+            if any_line:
                 idle_polls = 0
                 continue
             idle_polls += 1
@@ -331,7 +357,7 @@ def _convert_line_mp(line: str, mode: Optional[str], mapping: Any, validate: boo
 def _mp_load_patterns(pattern_files: list) -> None:
     import signal
 
-    from .custom import clear_registry, load_patterns
+    from .custom import clear_patterns, load_patterns
 
     # Ctrl-C reaches the whole process group; the parent handles it and
     # tears the pool down, so workers must not print tracebacks of their own.
@@ -342,8 +368,9 @@ def _mp_load_patterns(pattern_files: list) -> None:
     # Reload pattern files in each pool worker so --patterns works with
     # --multiprocess. Clear first: under the fork start method workers
     # inherit the parent's already-populated registry, and reloading into
-    # it would fail every worker with duplicate-name errors.
-    clear_registry()
+    # it would fail every worker with duplicate-name errors. Parsers from
+    # register_parser() are kept: a worker cannot recreate them.
+    clear_patterns()
     for path in pattern_files:
         load_patterns(path)
 

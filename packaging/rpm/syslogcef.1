@@ -22,8 +22,10 @@ and ISO), native Cisco console output (sequence numbers and clock-state
 markers), ISO-timestamp syslog with PRI, and key=value streams
 (Fortinet FortiGate, Sophos XG). Lines matching none of these are
 analyzed adaptively: a timestamp shape and host candidate are located
-and a pattern for the layout is synthesized and cached. Unparseable
-lines never abort the stream; they fall back to a raw-message event.
+and a pattern for the layout is synthesized and cached. With
+auto-detection, unparseable lines never abort the stream; they fall
+back to a raw-message event. With a forced \fB\-\-mode\fR, a line that
+parser rejects stops the run with an error.
 .PP
 Vendor mappings for Cisco ASA/IOS, F5 BIG-IP, Fortinet, Sophos,
 VMware, and generic Linux are bundled and selected automatically from
@@ -452,7 +454,8 @@ syslogcef /var/log/messages \-\-tail \-\-send kafka://broker.example.com:9092/ce
 .RE
 .fi
 .PP
-Force the Cisco ASA mapping and validate the output strictly:
+Use a mapping file you wrote instead of the automatic selection, and
+validate the output strictly:
 .PP
 .nf
 .RS
@@ -500,8 +503,12 @@ own \fI/etc/conf.d/syslogcef.name\fR.
 .TP
 .I /etc/logrotate.d/syslogcef
 Rotates flat \fI.cef\fR archives under \fI/var/log/syslogcef\fR daily
-using copytruncate (the service keeps its output open). Outputs using
-strftime templates rotate themselves and are not matched.
+using copytruncate (the service keeps its output open). The rule
+matches every \fI.cef\fR file directly in that directory, including a
+strftime-templated output that renders there (\fIevents\-%H.cef\fR),
+which would then be truncated while still in use. Keep templated
+outputs in a subdirectory (\fI%Y\-%m\-%d/events\-%H.cef\fR): they
+rotate themselves and are not matched.
 .TP
 .I syslogcef.service
 systemd unit (RPM and Debian packages). By default the service runs as
@@ -519,8 +526,8 @@ Bundled mapping files, importable from the Python package
 (\fBfrom syslogcef.mappings import load_mapping\fR).
 .SH SECURITY
 All log content is treated as untrusted. Pipes and backslashes are
-escaped in CEF header fields (CR/LF stripped) and pipes, equals signs,
-backslashes, and CR/LF are escaped in extension values, preventing
+escaped in CEF header fields (CR/LF replaced with spaces) and pipes,
+equals signs, backslashes, and CR/LF are escaped in extension values, preventing
 header forgery and record splitting. The listener decodes input as
 UTF-8 with replacement and never evaluates message content. Report
 vulnerabilities privately; see the SECURITY.md file in the source

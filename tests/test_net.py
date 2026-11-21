@@ -267,3 +267,41 @@ def test_kafka_async_failure_surfaces():
         sender.send("record two")
     with pytest.raises(ConnectionError):
         sender.close()
+
+
+def test_tcp_records_queued_while_consumer_stalls_are_not_reaped(monkeypatch):
+    # Review on #95: last_seen cannot advance while the generator is
+    # suspended, so a slow consumer must not make a client that sent
+    # records during the stall look idle and get closed with them unread.
+    import time
+
+    import syslogcef.net as net
+
+    monkeypatch.setattr(net, "TCP_IDLE_TIMEOUT", 0.2)
+    first_received = threading.Event()
+    client = {}
+
+    def send(port):
+        conn = socket.create_connection(("127.0.0.1", port), timeout=5)
+        client["conn"] = conn
+        conn.sendall(b"first\n")
+        first_received.wait(5)
+        conn.sendall(b"second\n")
+
+    ready, thread = _run_when_ready(send)
+    gen = listen_lines("tcp", "127.0.0.1", 0, max_messages=2, ready_callback=ready)
+    lines = [next(gen)]
+    first_received.set()
+    time.sleep(0.6)  # consumer stalls past the idle timeout
+    result = {}
+
+    def consume():
+        result["lines"] = list(gen)
+
+    reader = threading.Thread(target=consume, daemon=True)
+    reader.start()
+    reader.join(5)
+    thread.join(5)
+    client["conn"].close()
+
+    assert lines + result.get("lines", []) == ["first", "second"]

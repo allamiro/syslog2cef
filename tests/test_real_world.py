@@ -61,6 +61,21 @@ def test_ftd_event_code_routes_to_asa_mapping():
     assert fields(cef)[4] == "asa.FTD-6-305012"
 
 
+def test_plain_event_code_field_does_not_route_to_cisco():
+    # An application's own event_code= field is not a %FAC-SEV-MNEMONIC code.
+    cef = convert_line("<14>Jan  1 12:34:56 web1 auth: event_code=LOGIN_FAILED")
+    assert fields(cef)[1:3] == ["Linux", "Syslog"]
+
+
+def test_plain_event_code_field_does_not_set_severity():
+    # "-0-" inside an application code must not read as Cisco severity 0.
+    line = "event_code=APP-0-CRASH detail=oops"
+    assert normalize_event(parse_syslog(line)).severity is None
+    cef = convert_line(line)
+    assert fields(cef)[1] == "Linux"
+    assert fields(cef)[6] == "3"  # default, not CEF 10 (emergency)
+
+
 def test_pri_survives_sophos_kv_line():
     # Sophos XG style: PRI prefix followed by key=value pairs, no syslog
     # header. Parsed by the dedicated kv parser; PRI is preserved.

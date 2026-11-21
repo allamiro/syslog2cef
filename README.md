@@ -5,7 +5,7 @@
 <p align="center">
   <a href="https://github.com/allamiro/syslog2cef/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/allamiro/syslog2cef/ci.yml?branch=main&label=CI" alt="CI status"></a>
   <a href="https://pypi.org/project/syslog2cef/"><img src="https://img.shields.io/pypi/v/syslog2cef" alt="PyPI version"></a>
-  <a href="https://pypi.org/project/syslog2cef/"><img src="https://img.shields.io/pypi/pyversions/syslog2cef" alt="Supported Python versions"></a>
+  <a href="https://pypi.org/project/syslog2cef/"><img src="https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2Fallamiro%2Fsyslog2cef%2Fmain%2Fpyproject.toml" alt="Python 3.9 or later"></a>
   <a href="https://pypistats.org/packages/syslog2cef"><img src="https://img.shields.io/pypi/dm/syslog2cef" alt="PyPI downloads per month"></a>
   <a href="https://copr.fedorainfracloud.org/coprs/allamiro/syslogcef/"><img src="https://copr.fedorainfracloud.org/coprs/allamiro/syslogcef/package/syslogcef/status_image/last_build.png" alt="COPR build status"></a>
   <a href="https://github.com/allamiro/syslog2cef/pkgs/container/syslog2cef"><img src="https://img.shields.io/badge/container-ghcr.io-blue?logo=docker" alt="Container image on ghcr.io"></a>
@@ -42,8 +42,10 @@ platforms that consume CEF.
   fields, so crafted messages cannot forge header fields or split records.
 - Streaming CLI with stdin/file input, tail (follow) mode across multiple
   files, optional multiprocessing, and no runtime dependencies.
-- Malformed lines never abort a stream: unparseable input falls back to a
-  raw-message event.
+- With format auto-detection (the default), malformed lines never abort a
+  stream: unparseable input falls back to a raw-message event. A forced
+  `--mode` instead stops with an error at the first line that parser
+  rejects.
 
 ## Installation
 
@@ -397,7 +399,7 @@ installed there) and has independent restart, logs, and options:
 sudo cp /etc/syslogcef/conf.d/example.conf.sample /etc/syslogcef/conf.d/secure.conf
 sudo cp /etc/syslogcef/conf.d/example.conf.sample /etc/syslogcef/conf.d/firewall.conf
 sudo vi /etc/syslogcef/conf.d/secure.conf     # /var/log/secure  -> secure.cef
-sudo vi /etc/syslogcef/conf.d/firewall.conf   # --listen udp:514 --mode cisco_seq
+sudo vi /etc/syslogcef/conf.d/firewall.conf   # --listen udp:514
 sudo systemctl enable --now syslogcef@secure syslogcef@firewall
 ```
 
@@ -420,10 +422,10 @@ instructions, including GPG signing of the RPM.
 ## Security
 
 Log content is treated as untrusted input. Header and extension values are
-escaped per the CEF specification before rendering, and CR/LF are removed
-from header fields so records cannot be split or spoofed. To report a
-vulnerability, see [SECURITY.md](SECURITY.md) — please do not open public
-issues for security reports.
+escaped per the CEF specification before rendering, and CR/LF in header
+fields are replaced with spaces so records cannot be split or spoofed. To
+report a vulnerability, see [SECURITY.md](SECURITY.md) — please do not open
+public issues for security reports.
 
 ## Development
 

@@ -94,8 +94,10 @@ def normalize(event: ParsedEvent) -> NormalizedEvent:
     # PROCID (and kv pids) may be arbitrary strings ("worker-A"); expose
     # a numeric-only alias so mappings can emit dvcpid without tripping
     # strict validation. ASCII check: isdigit() alone accepts Unicode
-    # digits that int() consumers reject.
-    pid = str(event.pid) if event.pid is not None else ""
+    # digits that int() consumers reject. A kv pid= fills in only when the
+    # header carried none, matching the envelope precedence for %(pid)s.
+    pid = event.pid if event.pid is not None else kv.get("pid")
+    pid = str(pid) if pid is not None else ""
     if pid.isascii() and pid.isdigit():
         extras["dvcpid"] = pid
 
@@ -161,16 +163,15 @@ def _derive_common_fields(event: NormalizedEvent) -> None:
         if canonical not in event.kv and alias in event.kv:
             event.kv[canonical] = event.kv[alias]
 
-    if "event_code" not in event.kv:
-        code = _extract_event_code(event.msg)
-        if code:
-            event.kv["event_code"] = code
+    cisco_code = _extract_event_code(event.msg)
+    if cisco_code and "event_code" not in event.kv:
+        event.kv["event_code"] = cisco_code
 
     # Cisco codes embed the severity digit (%SEC-6-IPACCESSLOGRP -> 6);
-    # use it when the line carried no PRI.
-    if event.severity is None:
-        code = event.kv.get("event_code", "")
-        sev_match = re.search(r"-(\d)-", code)
+    # use it when the line carried no PRI. Only a code in Cisco syntax
+    # counts: an application's own event_code=APP-0-CRASH is not severity 0.
+    if event.severity is None and cisco_code:
+        sev_match = re.search(r"-(\d)-", cisco_code)
         if sev_match:
             event.severity = int(sev_match.group(1))
 

@@ -21,6 +21,10 @@ HEADER_KEYS = (
 # that merely ends in "Label" (classificationLabel) is independent data.
 _LABEL_SUFFIX = "Label"
 
+# Templates whose render failure has already been logged at warning level.
+# They come from mapping files, so the set stays as small as the mappings.
+_warned_templates: set = set()
+
 
 DEFAULT_MAPPING = {
     "deviceVendor": "Generic",
@@ -172,7 +176,16 @@ class MappingResolver:
             logger.debug("Missing key %s for template %s", exc, template)
             return ""
         except (ValueError, TypeError) as exc:
-            logger.warning("Invalid template %r: %s", template, exc)
+            # The same template fails again for every event of a stream;
+            # warn once so a misconfigured mapping cannot flood the log.
+            if template in _warned_templates:
+                logger.debug("Invalid template %r: %s", template, exc)
+            else:
+                _warned_templates.add(template)
+                logger.warning(
+                    "Invalid template %r: %s (repeats of this template are logged at debug level)",
+                    template, exc,
+                )
             return ""
 
 

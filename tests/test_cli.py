@@ -62,6 +62,53 @@ def test_follow_files_picks_up_appended_lines(tmp_path: Path):
     assert "new" in list(gen)
 
 
+def test_follow_files_busy_file_does_not_starve_later_files(tmp_path: Path):
+    # Review on #11: a file that always has another line ready never
+    # reaches EOF, so draining each file to EOF per pass would never
+    # visit the files after it.
+    from syslogcef.cli import follow_files
+
+    busy = tmp_path / "busy.log"
+    quiet = tmp_path / "quiet.log"
+    busy.write_text("busy-0\n", encoding="utf-8")
+    quiet.write_text("quiet-1\n", encoding="utf-8")
+
+    gen = follow_files([busy, quiet], poll_interval=0, max_idle_polls=1)
+    seen = []
+    with busy.open("a", encoding="utf-8") as writer:
+        for i in range(1, 1000):
+            line = next(gen)
+            seen.append(line)
+            if line == "quiet-1":
+                break
+            # Keep the busy file one line ahead of the reader.
+            writer.write(f"busy-{i}\n")
+            writer.flush()
+    gen.close()
+
+    assert "quiet-1" in seen
+
+
+def test_follow_files_waits_for_the_rest_of_a_partial_line(tmp_path: Path, monkeypatch):
+    # Review on #11: a writer can flush half a line; the follower must
+    # hold it until the newline arrives instead of emitting two events.
+    import syslogcef.cli as cli
+
+    log = tmp_path / "partial.log"
+    log.write_text("complete\npart", encoding="utf-8")
+
+    def finish_line_during_sleep(_seconds):
+        if not log.read_text(encoding="utf-8").endswith("\n"):
+            with log.open("a", encoding="utf-8") as fp:
+                fp.write("ial rest\n")
+
+    monkeypatch.setattr(cli.time, "sleep", finish_line_during_sleep)
+
+    lines = list(cli.follow_files([log], poll_interval=0, max_idle_polls=3))
+
+    assert lines == ["complete", "partial rest"]
+
+
 def test_write_lines_plain_truncates(tmp_path: Path):
     from syslogcef.cli import write_lines
 
@@ -214,6 +261,15 @@ def test_man_page_source_field_names_the_project():
     first = _checkout_file("packaging/rpm/syslogcef.1").read_text().splitlines()[0]
     assert first.startswith(".TH SYSLOGCEF 1 ")
     assert '"syslog2cef ' in first
+
+
+def test_man_page_version_matches_the_package():
+    # The .TH version is edited by hand at release time; an installed man
+    # page must not report a different version than the package.
+    from syslogcef import __version__
+
+    first = _checkout_file("packaging/rpm/syslogcef.1").read_text().splitlines()[0]
+    assert f'"syslog2cef {__version__}"' in first
 
 
 def test_external_resource_names_are_not_renamed():

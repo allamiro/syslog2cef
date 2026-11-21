@@ -34,9 +34,14 @@ carry the source address, source port, user name and result.
 <38>Nov 21 10:15:09 bastion sshd[2214]: Accepted publickey for deploy from 198.51.100.4 port 40022 ssh2
 ```
 
-The CEF values shown below were produced on 21 November 2026. The year of a
-yearless syslog timestamp, and therefore `rt=`, depends on the day you run
-the command (see "Timestamps without a year" in the README).
+Every output in this guide was produced by running the command shown, on
+21 November 2026, from a source checkout: the files under
+[examples/patterns/](../examples/patterns/) stood in for
+`/etc/syslogcef/patterns/`, and
+[examples/patterns/secure.log](../examples/patterns/secure.log), which holds
+the two lines above, stood in for `/var/log/secure`. The year of a yearless
+syslog timestamp, and therefore `rt=`, depends on the day you run the command
+(see "Timestamps without a year" in the README).
 
 ### 1. Find the lines that need work: `--stats`
 
@@ -48,9 +53,9 @@ syslogcef --stats /var/log/secure > /dev/null
 ```
 
 ```text
-syslogcef: 1250 lines
+syslogcef: 2 lines
   by parser:
-    rfc3164  1250
+    rfc3164  2
   unmatched (adaptive or unknown): 0
 ```
 
@@ -100,7 +105,7 @@ fields:
   msg = Failed password for invalid user admin from 203.0.113.7 port 52144 ssh2
   pid = 2211
   pri = 38
-  raw_kv =
+  raw_kv = 
   rt = 1795256102000
   severity = 6
   source_hint = rfc3164
@@ -233,10 +238,14 @@ or example (usually a typo) also counts as a failure; see
 cannot be combined with input paths, `--listen` or `--tail`. With no examples
 in any loaded file it prints `no examples defined` and exits 0.
 
-A failure names the example and says what was wrong:
+A failure names the example and says what was wrong. Here the second
+example's `expect` was changed to `"spt": 40023`:
 
 ```text
-FAIL sshd_auth example 2: field spt: expected '40022', got '40023'
+PASS sshd_auth example 1
+FAIL sshd_auth example 2: field spt: expected '40023', got '40022'
+PASS sshd_auth example 3
+2/3 examples passed
 ```
 
 Run it whenever you change a pattern file, and in CI if your pattern files
@@ -301,7 +310,7 @@ is [examples/patterns/sshd-mapping.json](../examples/patterns/sshd-mapping.json)
 ### 7. Check the result
 
 ```bash
-syslogcef --patterns /etc/syslogcef/patterns/sshd.json --explain /var/log/secure
+head -n 1 /var/log/secure | syslogcef --patterns /etc/syslogcef/patterns/sshd.json --explain
 ```
 
 ```text
@@ -323,7 +332,7 @@ fields:
   outcome = Failed
   pid = 2211
   pri = 38
-  raw_kv =
+  raw_kv = 
   rt = 1795256102000
   severity = 6
   source_hint = rfc3164
@@ -336,10 +345,31 @@ fields:
 cef:     CEF:0|OpenBSD|OpenSSH|auto|sshd.Failed|Failed password for invalid user admin from 203.0.113.7 port 52144 ssh2|2|msg=Failed password for invalid user admin from 203.0.113.7 port 52144 ssh2 shost=bastion rt=1795256102000 src=203.0.113.7 spt=52144 suser=admin outcome=Failed sproc=sshd dvcpid=2211 cs2Label=authMethod cs2=password cs1Label=rawEvent cs1=<38>Nov 21 10:15:02 bastion sshd[2211]: Failed password for invalid user admin from 203.0.113.7 port 52144 ssh2
 ```
 
-Without `--explain`, the second line becomes:
+Without `--explain`, both lines convert to CEF with the captured fields:
+
+```bash
+syslogcef --patterns /etc/syslogcef/patterns/sshd.json /var/log/secure
+```
 
 ```text
+CEF:0|OpenBSD|OpenSSH|auto|sshd.Failed|Failed password for invalid user admin from 203.0.113.7 port 52144 ssh2|2|msg=Failed password for invalid user admin from 203.0.113.7 port 52144 ssh2 shost=bastion rt=1795256102000 src=203.0.113.7 spt=52144 suser=admin outcome=Failed sproc=sshd dvcpid=2211 cs2Label=authMethod cs2=password cs1Label=rawEvent cs1=<38>Nov 21 10:15:02 bastion sshd[2211]: Failed password for invalid user admin from 203.0.113.7 port 52144 ssh2
 CEF:0|OpenBSD|OpenSSH|auto|sshd.Accepted|Accepted publickey for deploy from 198.51.100.4 port 40022 ssh2|2|msg=Accepted publickey for deploy from 198.51.100.4 port 40022 ssh2 shost=bastion rt=1795256109000 src=198.51.100.4 spt=40022 suser=deploy outcome=Accepted sproc=sshd dvcpid=2214 cs2Label=authMethod cs2=publickey cs1Label=rawEvent cs1=<38>Nov 21 10:15:09 bastion sshd[2214]: Accepted publickey for deploy from 198.51.100.4 port 40022 ssh2
+```
+
+`--stats` now has a "by msg pattern" section, which shows how many lines the
+pattern picked fields out of:
+
+```bash
+syslogcef --stats --patterns /etc/syslogcef/patterns/sshd.json /var/log/secure > /dev/null
+```
+
+```text
+syslogcef: 2 lines
+  by parser:
+    rfc3164  2
+  by msg pattern:
+    sshd_auth  2
+  unmatched (adaptive or unknown): 0
 ```
 
 Add `--validate` while you are developing. It warns when a value does not fit
@@ -698,11 +728,24 @@ match; `--explain` on the example line shows which one did.
 ### Error messages
 
 Pattern files are checked when they load: at startup, and for
-`--check-patterns`. Any problem stops syslogcef with exit status 2 and a
-message that names the file and the pattern:
+`--check-patterns`. Any problem stops syslogcef with exit status 2, a usage
+summary, and a message that names the file and the pattern. For example, with
+`%{IPADDR:src}` in the regex instead of `%{IP:src}`:
+
+```bash
+cd /etc/syslogcef/patterns
+syslogcef --patterns sshd.json --check-patterns
+```
 
 ```text
-syslogcef: error: /etc/syslogcef/patterns/sshd.json: pattern 'sshd_auth': ...
+usage: syslogcef [-h] [-o OUTPUT] [-a] [--mode MODE] [--mapping MAPPING]
+                 [--patterns FILE] [--tail] [--check-patterns]
+                 [--listen PROTO:PORT] [--send URL] [--eps EPS]
+                 [--multiprocess] [--pool-size POOL_SIZE] [--validate]
+                 [--strict] [--explain] [--stats] [--log-level LOG_LEVEL]
+                 [--version]
+                 [paths ...]
+syslogcef: error: sshd.json: pattern 'sshd_auth': unknown shorthand %{IPADDR}; known: DATA, GREEDYDATA, HOSTNAME, INT, IP, IPV4, IPV6, LOGLEVEL, MAC, NOTSPACE, NUMBER, PATH, PORT, QUOTEDSTRING, SYSLOGTIMESTAMP, TIMESTAMP_ISO8601, USER, WORD
 ```
 
 The message text contains one of these phrases:
@@ -833,6 +876,10 @@ Python's `re` is the engine, so a quick check works without syslogcef:
 
 ```bash
 python3 -c 'import re; print(re.search(r"^(?P<outcome>Accepted|Failed) (?P<auth_method>\S+) for", "Failed password for admin").groupdict())'
+```
+
+```text
+{'outcome': 'Failed', 'auth_method': 'password'}
 ```
 
 (Shorthands are expanded by syslogcef, so write the plain regex in such a

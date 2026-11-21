@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-21
+
+Completes the 0.4.1 release. 0.4.1 reached PyPI and the container
+registry, but its RPM build failed, so it has no GitHub release, RPM, Debian
+or Alpine package, or zipapp. Use 0.4.2 for those; it contains everything in
+0.4.1.
+
+### Fixed
+
+- The test suite passes when run from the sdist, as the RPM `%check` does.
+  Three tests added with the rename read the CHANGELOG, the man page source
+  and the signing keys, which the sdist does not ship; they now skip when
+  those files are absent and still run in a git checkout. CI also runs the
+  suite from a freshly built sdist, so this is caught before a release.
+
 ## [0.4.1] - 2026-11-21
 
 ### Changed
@@ -437,7 +452,8 @@ Initial release.
 - `--tail` now follows all given input files instead of blocking on the
   first one.
 
-[Unreleased]: https://github.com/allamiro/syslog2cef/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/allamiro/syslog2cef/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/allamiro/syslog2cef/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/allamiro/syslog2cef/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/allamiro/syslog2cef/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/allamiro/syslog2cef/compare/v0.3.2...v0.3.3

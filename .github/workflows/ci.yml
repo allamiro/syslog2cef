@@ -55,6 +55,16 @@ jobs:
           ruff check .
       - name: ShellCheck packaging scripts
         run: shellcheck packaging/debian/build-deb.sh
+      - name: Run tests from the sdist
+        # The RPM %check runs the suite from the PyPI sdist, which has no
+        # CHANGELOG, packaging files or keys. Catch tests that need a git
+        # checkout here instead of in the release workflow.
+        run: |
+          pip install build pytest
+          python -m build --sdist --outdir "$RUNNER_TEMP/dist"
+          mkdir "$RUNNER_TEMP/sdist"
+          tar -xzf "$RUNNER_TEMP"/dist/*.tar.gz -C "$RUNNER_TEMP/sdist" --strip-components=1
+          cd "$RUNNER_TEMP/sdist" && python -m pytest -q
 
   docker:
     runs-on: ubuntu-24.04

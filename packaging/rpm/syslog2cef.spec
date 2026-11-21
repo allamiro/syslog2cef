@@ -1,5 +1,5 @@
 Name:           syslog2cef
-Version:        0.4.1
+Version:        0.4.2
 Release:        1%{?dist}
 Summary:        Convert syslog events to ArcSight CEF
 
@@ -100,6 +100,10 @@ install -D -m 0644 %{SOURCE7} %{buildroot}%{_sysusersdir}/syslogcef.conf
 %{_sysusersdir}/syslogcef.conf
 
 %changelog
+* Sat Nov 21 2026 Tamir Suliman <allamiro@gmail.com> - 0.4.2-1
+- Skip tests that need a git checkout when %check runs from the sdist,
+  which stopped the 0.4.1 RPM build
+
 * Sat Nov 21 2026 Tamir Suliman <allamiro@gmail.com> - 0.4.1-1
 - Rename the package from syslogcef to syslog2cef to match the project,
   repository and PyPI distribution; Provides/Obsoletes keep upgrades in place

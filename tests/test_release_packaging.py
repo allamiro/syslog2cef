@@ -199,3 +199,12 @@ def test_readme_signature_claim_matches_the_release_workflow():
     # RPMs carry an embedded rpmsign signature, not a detached .asc.
     assert "Every asset ships with a detached" not in readme
     assert "rpm --checksig" in readme
+
+
+def test_fuzz_readme_reproduces_crashes_from_the_artifact_directory():
+    text = _checkout_file("fuzz/README.md").read_text()
+    # The documented docker run mounts ./artifacts as the crash directory.
+    assert '-v "$PWD/artifacts":/artifacts' in text
+    assert "-artifact_prefix=/artifacts/" in text
+    repro = re.findall(r"python fuzz/fuzz_convert\.py (\S*crash-\S+)", text)
+    assert repro and all(path.startswith("artifacts/") for path in repro), repro

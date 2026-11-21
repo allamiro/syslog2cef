@@ -47,10 +47,11 @@ Reference run (2026-08-11, 3 minutes): **887,058 executions, zero
 crashes or hangs**.
 
 Crashing inputs are written to the `-artifact_prefix` directory as
-`crash-*` files; reproduce with:
+`crash-*` files (`./artifacts/` with the Docker command above); reproduce
+from the repo root with:
 
 ```bash
-python fuzz/fuzz_convert.py crash-<hash>
+python fuzz/fuzz_convert.py artifacts/crash-<hash>
 ```
 
 ## Corpus

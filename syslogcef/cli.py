@@ -71,6 +71,8 @@ class _Follower:
         self.fp_len = 0
         self.fingerprint = b""
         self.pending = deque()
+        # Start of a line whose newline has not been written yet.
+        self.partial = ""
 
     def _fsignature(self):
         import os
@@ -105,9 +107,15 @@ class _Follower:
         if self.handle is None:
             return
         while limit is None or count < limit:
-            line = self.handle.readline()
-            if not line:
+            chunk = self.handle.readline()
+            if not chunk:
                 break
+            if not chunk.endswith("\n"):
+                # The writer is mid-line: hold the fragment until the
+                # newline arrives instead of emitting the line in pieces.
+                self.partial += chunk
+                break
+            line, self.partial = self.partial + chunk, ""
             count += 1
             yield line.rstrip("\n")
         # Record the consumed-head fingerprint so the next rotation check
@@ -147,7 +155,13 @@ class _Follower:
             return False
         if (st.st_dev, st.st_ino) != self.signature:
             for line in self.handle:
-                self.pending.append(line.rstrip("\n"))
+                self.pending.append((self.partial + line).rstrip("\n"))
+                self.partial = ""
+            # The old file is finished, so an unterminated last line is
+            # as complete as it will get.
+            if self.partial:
+                self.pending.append(self.partial)
+                self.partial = ""
             self.handle.close()
             self.handle = None
             return self.check_rotation()  # open the replacement immediately
@@ -164,6 +178,11 @@ class _Follower:
             elif self.fp_len and self._read_head(self.fp_len) != self.fingerprint:
                 rewound = True
         if rewound:
+            # The rest of a held fragment went to the rotated copy; emit
+            # what we have rather than drop it.
+            if self.partial:
+                self.pending.append(self.partial)
+                self.partial = ""
             self.handle.seek(0)
             self.fp_len, self.fingerprint = 0, b""
         return rewound

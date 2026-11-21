@@ -267,3 +267,22 @@ def test_copy_truncate_during_poll_sleep_is_not_read_from_stale_offset(tmp_path:
     lines = drain(follow_files([log], poll_interval=0, max_idle_polls=3))
 
     assert lines == ["old-1", "old-2", "new-1", "new-2", "new-3"]
+
+
+def test_held_partial_line_is_joined_when_draining_a_rotated_file(tmp_path: Path):
+    from syslogcef.cli import _Follower
+
+    log = tmp_path / "app.log"
+    log.write_text("one\npar", encoding="utf-8")
+    follower = _Follower(log)
+    assert list(follower.read_lines()) == ["one"]  # "par" is held
+
+    rotated = tmp_path / "app.log.1"
+    os.rename(log, rotated)
+    with rotated.open("a", encoding="utf-8") as fp:
+        fp.write("tial\nlast-unterminated")
+    log.write_text("new\n", encoding="utf-8")
+
+    assert follower.check_rotation() is True
+    assert list(follower.read_lines()) == ["partial", "last-unterminated", "new"]
+    follower.close()

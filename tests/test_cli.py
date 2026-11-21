@@ -89,6 +89,26 @@ def test_follow_files_busy_file_does_not_starve_later_files(tmp_path: Path):
     assert "quiet-1" in seen
 
 
+def test_follow_files_waits_for_the_rest_of_a_partial_line(tmp_path: Path, monkeypatch):
+    # Review on #11: a writer can flush half a line; the follower must
+    # hold it until the newline arrives instead of emitting two events.
+    import syslogcef.cli as cli
+
+    log = tmp_path / "partial.log"
+    log.write_text("complete\npart", encoding="utf-8")
+
+    def finish_line_during_sleep(_seconds):
+        if not log.read_text(encoding="utf-8").endswith("\n"):
+            with log.open("a", encoding="utf-8") as fp:
+                fp.write("ial rest\n")
+
+    monkeypatch.setattr(cli.time, "sleep", finish_line_during_sleep)
+
+    lines = list(cli.follow_files([log], poll_interval=0, max_idle_polls=3))
+
+    assert lines == ["complete", "partial rest"]
+
+
 def test_write_lines_plain_truncates(tmp_path: Path):
     from syslogcef.cli import write_lines
 

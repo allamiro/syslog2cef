@@ -33,7 +33,7 @@ gzip -9n "$STAGE/usr/share/man/man1/syslogcef.1"
 
 INSTALLED_SIZE=$(du -sk "$STAGE" | cut -f1)
 
-# Renamed from syslogcef in 0.3.4. Replaces/Conflicts let this package take
+# Renamed from syslogcef in 0.4.1. Replaces/Conflicts let this package take
 # over an installed syslogcef when the .deb is installed directly, which is
 # how it ships (GitHub release asset). Debian has no Obsoletes equivalent, so
 # a repository-driven "apt upgrade" migration would need a transitional

@@ -224,11 +224,54 @@ def test_external_resource_names_are_not_renamed():
 
 
 def test_changelog_history_is_not_rewritten():
-    # Entries predating 0.3.4 must keep the names that were true then.
+    # Entries predating 0.4.1 must keep the names that were true then.
     from pathlib import Path
 
     text = Path(__file__).resolve().parent.parent.joinpath("CHANGELOG.md").read_text()
-    history = text.split("## [0.3.3]", 1)[1]
+    history = text.split("## [0.4.0]", 1)[1]
     assert "ghcr.io/allamiro/syslogcef" in history
     assert "`allamiro/syslogcef`" in history
     assert "ghcr.io/allamiro/syslog2cef" not in history
+
+
+def _run_cli(*args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [sys.executable, "-m", "syslogcef", *args],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+
+def test_version_shows_version_and_author():
+    out = _run_cli("--version").stdout
+
+    from syslogcef import __version__
+
+    lines = out.splitlines()
+    # First line is "name version" so scripts can parse it.
+    assert lines[0] == f"syslogcef {__version__}"
+    assert "Copyright (c) 2023 Tamir Suliman" in lines
+    assert lines[-1] == "Written by Tamir Suliman <allamiro@gmail.com>."
+
+
+def test_conversion_output_has_no_author_line():
+    # stdout carries CEF records for SIEMs; nothing else may be printed.
+    result = subprocess.run(
+        [sys.executable, "-m", "syslogcef"],
+        input="<166>Jan  1 12:34:56 router1 %ASA-6-302013: Built inbound TCP connection\n",
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert result.stdout.splitlines()[0].startswith("CEF:0|")
+    assert len(result.stdout.splitlines()) == 1
+
+
+def test_package_version_matches_pyproject():
+    import re
+
+    from syslogcef import __version__
+
+    pyproject = (Path(__file__).resolve().parent.parent / "pyproject.toml").read_text(encoding="utf-8")
+    assert re.search(r'^version = "([^"]+)"', pyproject, re.M).group(1) == __version__

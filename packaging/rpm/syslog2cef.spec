@@ -1,5 +1,5 @@
 Name:           syslog2cef
-Version:        0.3.4
+Version:        0.4.1
 Release:        1%{?dist}
 Summary:        Convert syslog events to ArcSight CEF
 
@@ -27,11 +27,11 @@ Source7:        syslogcef.sysusers
 %global python3_pkgversion 3.11
 %endif
 
-# Renamed from syslogcef in 0.3.4 to match the project and PyPI name.
+# Renamed from syslogcef in 0.4.1 to match the project and PyPI name.
 # The command, config paths and unit names are unchanged, so an existing
 # install upgrades in place.
 Provides:       syslogcef = %{version}-%{release}
-Obsoletes:      syslogcef < 0.3.4-1
+Obsoletes:      syslogcef < 0.4.1-1
 
 BuildArch:      noarch
 BuildRequires:  python%{python3_pkgversion}-devel
@@ -100,10 +100,17 @@ install -D -m 0644 %{SOURCE7} %{buildroot}%{_sysusersdir}/syslogcef.conf
 %{_sysusersdir}/syslogcef.conf
 
 %changelog
-* Wed Aug 12 2026 Tamir Suliman <allamiro@gmail.com> - 0.3.4-1
+* Sat Nov 21 2026 Tamir Suliman <allamiro@gmail.com> - 0.4.1-1
 - Rename the package from syslogcef to syslog2cef to match the project,
   repository and PyPI distribution; Provides/Obsoletes keep upgrades in place
 - The syslogcef command, config paths, unit names and system user are unchanged
+
+* Sat Nov 21 2026 Tamir Suliman <allamiro@gmail.com> - 0.4.0-1
+- Carry the raw line in the Cisco ASA cs1 and drop custom-field labels
+  whose value is empty
+- Date yearless timestamps to their most recent past occurrence instead
+  of the nearest one, which could be next year
+- Build the COPR SRPM from the git checkout instead of PyPI
 
 * Wed Aug 12 2026 Tamir Suliman <allamiro@gmail.com> - 0.3.3-1
 - Stop a cached hostless adaptive layout from suppressing hosts on later

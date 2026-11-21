@@ -5,9 +5,18 @@ on:
     branches: [ main, master ]
   pull_request:
 
+# Least privilege: no job here writes to the repository, and an explicit
+# block also stops a permissive default at the org or repo level from
+# applying (CodeQL "workflow does not contain permissions").
+permissions:
+  contents: read
+
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moved to 26.04, where actions/setup-python has
+    # no CPython 3.9 build, failing the declared-minimum matrix entry.
+    # Revisit when 3.9 support is dropped.
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -16,9 +25,9 @@ jobs:
         # stable CPython (3.14), and the versions between.
         python-version: ['3.9', '3.10', '3.11', '3.12', '3.13', '3.14']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
@@ -33,11 +42,11 @@ jobs:
         run: pytest
 
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
       - name: Ruff
@@ -48,11 +57,11 @@ jobs:
         run: shellcheck packaging/debian/build-deb.sh
 
   docker:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Lint Dockerfile
-        uses: hadolint/hadolint-action@v3.1.0
+        uses: hadolint/hadolint-action@v3.5.0
         with:
           dockerfile: Dockerfile
       - name: Build image

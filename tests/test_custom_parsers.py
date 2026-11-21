@@ -288,3 +288,20 @@ def test_cli_rejects_unknown_mode(tmp_path: Path):
 
     with pytest.raises(SystemExit):
         main(["--mode", "nonexistent"])
+
+def test_yearless_pattern_timestamp_is_dated_in_the_past(tmp_path: Path):
+    # Issue #112: custom patterns share the built-in year inference.
+    load_patterns(
+        write_patterns(
+            tmp_path,
+            {"name": "past", "regex": r"^P (?P<ts>\w{3} \d{2} \d{2}:\d{2}:\d{2}) (?P<msg>.*)$", "timestamp_format": "%b %d %H:%M:%S"},
+        )
+    )
+    parse = custom.get_registered("past")
+
+    late_november = datetime(2026, 11, 20, tzinfo=timezone.utc)
+    assert parse("P Jan 01 12:34:56 x", now=late_november).ts.year == 2026
+    assert parse("P Nov 25 10:00:00 x", now=late_november).ts.year == 2025
+
+    new_years_eve = datetime(2026, 12, 31, 23, 59, 58, tzinfo=timezone.utc)
+    assert parse("P Jan 01 00:00:05 x", now=new_years_eve).ts.year == 2027

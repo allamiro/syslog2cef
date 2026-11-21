@@ -23,7 +23,9 @@ which:
 ## Cutting a Release
 
 ```bash
-# 1. Update the version in pyproject.toml and packaging/rpm/syslog2cef.spec
+# 1. Update the version in pyproject.toml and packaging/rpm/syslog2cef.spec,
+#    and version/date-released in CITATION.cff (plus the README BibTeX),
+#    and __version__ in syslogcef/_version.py (a test checks it matches)
 # 2. Move the Unreleased section of CHANGELOG.md under the new version
 # 3. Commit via a PR, then tag the merge commit on main:
 git checkout main && git pull
@@ -38,7 +40,7 @@ Independently of the release workflow, the
 [COPR project](https://copr.fedorainfracloud.org/coprs/allamiro/syslogcef/)
 rebuilds the package for Fedora, EPEL 9/10, and CentOS Stream 9/10 on every
 push to `main` (a GitHub webhook, package source: this repository,
-`packaging/rpm/syslogcef.spec`, rpkg method). Those builds generate the
+`packaging/rpm/syslog2cef.spec`, rpkg method). Those builds generate the
 source tarball from the git checkout ([packaging/rpm/rpkg.macros](packaging/rpm/rpkg.macros)),
 so they do not wait for the sdist to reach PyPI and always package the
 pushed commit; nothing needs to be triggered by hand.

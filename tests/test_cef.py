@@ -184,3 +184,47 @@ def test_full_conversion_syntax_is_accepted(template):
     # Flags, width, precision and length modifiers are all valid syntax;
     # whether a given value satisfies the conversion is data-dependent.
     assert convert_line("plain log", mapping={"name": template}).startswith("CEF:0|")
+
+
+def _extensions(cef: str) -> str:
+    return cef.split("|", 7)[7]
+
+
+def test_asa_line_without_kv_keeps_raw_event_value():
+    # Issue #111: the ASA mapping took cs1 from raw_kv, which is empty for
+    # most ASA messages, so cs1 was dropped but cs1Label=rawEvent remained.
+    line = "<166>Jan  1 12:34:56 fw1 %ASA-6-302013: Built inbound TCP connection"
+    ext = _extensions(convert_line(line))
+
+    assert "cs1Label=rawEvent" in ext
+    assert "cs1=<166>Jan  1 12:34:56 fw1 %ASA-6-302013: Built inbound TCP connection" in ext
+
+
+@pytest.mark.parametrize("name", ["cisco_asa", "cisco_ios", "f5", "fortinet", "linux", "sophos", "vmware"])
+def test_bundled_mappings_carry_the_raw_line_in_cs1(name):
+    assert load_mapping(name)["extensions"]["cs1"] == "%(raw)s"
+
+
+@pytest.mark.parametrize(
+    "label, value",
+    [("cs2Label", "cs2"), ("cn1Label", "cn1"), ("c6a1Label", "c6a1"),
+     ("deviceCustomDate1Label", "deviceCustomDate1"), ("flexString1Label", "flexString1")],
+)
+def test_label_is_dropped_when_its_value_is_empty(label, value):
+    mapping = {"extensions": {label: "Session", value: "%(session)s"}}
+
+    without = _extensions(convert_line("srcip=1.2.3.4 action=x", mapping=mapping))
+    assert f"{label}=" not in without
+    assert f" {value}=" not in f" {without}"
+
+    with_value = _extensions(convert_line("srcip=1.2.3.4 session=abc", mapping=mapping))
+    assert f"{label}=Session" in with_value
+    assert f"{value}=abc" in with_value
+
+
+def test_custom_key_ending_in_label_is_not_treated_as_a_label():
+    # Only the dictionary's custom-field labels pair with a value; an
+    # independent custom key that merely ends in "Label" keeps its data.
+    ext = _extensions(convert_line("plain log", mapping={"extensions": {"classificationLabel": "Confidential"}}))
+
+    assert "classificationLabel=Confidential" in ext

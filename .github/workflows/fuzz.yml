@@ -5,13 +5,19 @@ on:
     - cron: '17 3 * * 1'  # weekly, Monday 03:17 UTC
   workflow_dispatch:
 
+# Least privilege: no job here writes to the repository, and an explicit
+# block also stops a permissive default at the org or repo level from
+# applying (CodeQL "workflow does not contain permissions").
+permissions:
+  contents: read
+
 jobs:
   hypothesis-deep:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - name: Install with fuzz extra
@@ -27,7 +33,7 @@ jobs:
         # Only when the fuzz step itself failed (not e.g. pip install),
         # so the .hypothesis directory is guaranteed to exist.
         if: failure() && steps.fuzz.outcome == 'failure'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: hypothesis-examples
           path: .hypothesis/examples/

@@ -73,3 +73,47 @@ def test_rfc3164_year_rollover_previous_year():
     line = "<14>Dec 31 23:59:59 host1 app: year rollover"
     result = autodetect_and_parse(line, now=datetime(2024, 1, 2, tzinfo=timezone.utc))
     assert result.ts.year == 2023
+
+
+# Issue #112: a yearless timestamp describes an event that already
+# happened, so it takes the most recent occurrence that is not later than
+# now plus a small clock-skew/timezone tolerance — never a date months
+# ahead just because it is nearer than last year's.
+
+@pytest.mark.parametrize(
+    "line, now, year",
+    [
+        # Jan 1 seen in late November: earlier this year, not next year.
+        ("<14>Jan  1 12:34:56 h1 sshd[22]: x", datetime(2026, 11, 20, tzinfo=timezone.utc), 2026),
+        # Year boundary: a line stamped just after midnight by a clock
+        # slightly ahead lands in the year that is about to begin.
+        ("<14>Jan  1 00:00:05 h1 app: x", datetime(2026, 12, 31, 23, 59, 58, tzinfo=timezone.utc), 2027),
+        # Later today (sender in a timezone ahead of UTC) stays this year.
+        ("<14>Nov 20 22:00:00 h1 app: x", datetime(2026, 11, 20, 9, 0, tzinfo=timezone.utc), 2026),
+        # Several days in the future can only be last year's date.
+        ("<14>Nov 25 10:00:00 h1 app: x", datetime(2026, 11, 20, tzinfo=timezone.utc), 2025),
+        # Six-plus months back is still the past, not next year.
+        ("<14>Mar  3 10:00:00 h1 app: x", datetime(2026, 11, 20, tzinfo=timezone.utc), 2026),
+    ],
+)
+def test_yearless_timestamp_is_dated_in_the_past(line, now, year):
+    assert autodetect_and_parse(line, now=now).ts.year == year
+
+
+def test_yearless_feb29_takes_the_last_leap_day_in_the_past():
+    from syslogcef.parsers import _infer_timestamp
+
+    # 2028-02-29 is nearer to 2027-03-01 than 2024-02-29, but it has not
+    # happened yet.
+    ts = _infer_timestamp(2, 29, "12:00:00", now=datetime(2027, 3, 1, tzinfo=timezone.utc))
+    assert ts.year == 2024
+
+
+def test_adaptive_mon_day_is_dated_in_the_past():
+    import re
+
+    from syslogcef.adaptive import TIMESTAMP_LIB
+
+    src, conv = next((s, c) for n, s, c in TIMESTAMP_LIB if n == "mon_day")
+    ts = conv(re.compile(src).match("Jan  1 12:34:56"), datetime(2026, 11, 20, tzinfo=timezone.utc))
+    assert ts.year == 2026

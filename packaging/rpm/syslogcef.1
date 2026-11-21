@@ -1,4 +1,4 @@
-.TH SYSLOGCEF 1 "August 2026" "syslog2cef 0.3.4" "User Commands"
+.TH SYSLOGCEF 1 "November 2026" "syslog2cef 0.4.1" "User Commands"
 .SH NAME
 syslogcef \- convert syslog events to ArcSight Common Event Format (CEF)
 .SH SYNOPSIS
@@ -161,6 +161,12 @@ to at most \fIN\fR events per second.
 Python logging level (default
 .BR WARNING ).
 Validation findings are emitted at WARNING.
+.TP
+.B \-\-version
+Print the version, copyright, license and author, then exit.
+.TP
+.BR \-h ", " \-\-help
+Print a usage summary, then exit.
 .SH EXIT STATUS
 .TP
 .B 0
@@ -293,4 +299,9 @@ Project homepage and issue tracker:
 .UR https://github.com/allamiro/syslog2cef
 .UE
 .SH AUTHOR
-Tamir Suliman <allamiro@gmail.com>
+Written by Tamir Suliman <allamiro@gmail.com>.
+.SH COPYRIGHT
+Copyright \(co 2023 Tamir Suliman.
+License MIT: <https://opensource.org/licenses/MIT>.
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.

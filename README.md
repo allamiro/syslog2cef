@@ -2,6 +2,19 @@
   <img src="https://raw.githubusercontent.com/allamiro/syslog2cef/main/docs/logo.svg" alt="syslog2cef logo" width="540">
 </p>
 
+<p align="center">
+  <a href="https://github.com/allamiro/syslog2cef/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/allamiro/syslog2cef/ci.yml?branch=main&label=CI" alt="CI status"></a>
+  <a href="https://pypi.org/project/syslog2cef/"><img src="https://img.shields.io/pypi/v/syslog2cef" alt="PyPI version"></a>
+  <a href="https://pypi.org/project/syslog2cef/"><img src="https://img.shields.io/pypi/pyversions/syslog2cef" alt="Supported Python versions"></a>
+  <a href="https://pypistats.org/packages/syslog2cef"><img src="https://img.shields.io/pypi/dm/syslog2cef" alt="PyPI downloads per month"></a>
+  <a href="https://copr.fedorainfracloud.org/coprs/allamiro/syslogcef/"><img src="https://copr.fedorainfracloud.org/coprs/allamiro/syslogcef/package/syslogcef/status_image/last_build.png" alt="COPR build status"></a>
+  <a href="https://github.com/allamiro/syslog2cef/pkgs/container/syslog2cef"><img src="https://img.shields.io/badge/container-ghcr.io-blue?logo=docker" alt="Container image on ghcr.io"></a>
+  <a href="https://github.com/allamiro/syslog2cef/actions/workflows/fuzz.yml"><img src="https://img.shields.io/github/actions/workflow/status/allamiro/syslog2cef/fuzz.yml?branch=main&label=deep%20fuzz" alt="Deep fuzz status"></a>
+  <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/badge/lint-ruff-261230" alt="Linted with Ruff"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/allamiro/syslog2cef" alt="MIT license"></a>
+  <a href="CITATION.cff"><img src="https://img.shields.io/badge/cite-CITATION.cff-informational" alt="Citation file"></a>
+</p>
+
 # syslog2cef
 
 syslog2cef converts syslog events into ArcSight Common Event Format (CEF). It
@@ -13,11 +26,18 @@ platforms that consume CEF.
 
 - Automatic detection and parsing of multiple syslog dialects:
   RFC3164 (BSD), RFC5424 (including structured data), rsyslog JSON and
-  file formats, and systemd journal exports (JSON, short, and ISO formats).
+  file formats, systemd journal exports (JSON, short, and ISO formats),
+  Cisco console/buffer lines, ISO-timestamp syslog, and key=value streams
+  (Fortinet, Sophos). Unknown layouts are learned adaptively.
 - Deterministic vendor/product mappings bundled for Cisco ASA, Cisco IOS,
-  F5 BIG-IP, generic Linux, and VMware ESXi, with automatic mapping
-  selection based on message content.
-- Custom mappings supplied as JSON files or Python dictionaries.
+  F5 BIG-IP, Fortinet FortiGate, Sophos XG Firewall, VMware ESXi, and
+  generic Linux, with automatic mapping selection based on message content.
+- Custom mappings supplied as JSON files or Python dictionaries, and custom
+  parsers supplied as regex pattern files.
+- Validation of CEF extension values against the ArcSight extension
+  dictionary (`--validate`, `--strict`).
+- Network receiver (`--listen udp:514`) and forwarding to UDP, TCP, or
+  Kafka (`--send`), with optional rate limiting.
 - Escaping of untrusted log content in both CEF header and extension
   fields, so crafted messages cannot forge header fields or split records.
 - Streaming CLI with stdin/file input, tail (follow) mode across multiple
@@ -116,13 +136,21 @@ Options:
 | Option | Description |
 | ------ | ----------- |
 | `paths` | Input files; stdin is used when omitted. |
-| `-o, --output FILE` | Write CEF lines to a file instead of stdout. |
-| `--mode MODE` | Parser override: `rfc3164`, `rfc5424`, `rsyslog_json`, `rsyslog_file`, `journald_json`, `journald_short`, `journald_iso`. Auto-detected when omitted. |
+| `-o, --output FILE` | Write CEF lines to a file instead of stdout. Accepts strftime codes for timed files (see "Timed output files"). |
+| `-a, --append` | Append to `--output` instead of truncating it (implied for templated paths). |
+| `--mode MODE` | Parser override: `rfc3164`, `rfc5424`, `rsyslog_json`, `rsyslog_file`, `journald_json`, `journald_short`, `journald_iso`, `cisco_seq`, `iso_syslog`, `kv`, or a name from `--patterns`. Auto-detected when omitted. |
 | `--mapping FILE` | Mapping JSON file. Auto-selected from message content when omitted. |
+| `--patterns FILE` | Custom parser patterns (see "Custom Parsers"); may be repeated. |
 | `--tail` | Follow input files like `tail -f`. |
+| `--listen PROTO:PORT` | Receive syslog over the network instead of files/stdin: `udp:514`, `tcp:5514`, or `udp:10.0.0.5:514`. |
+| `--send URL` | Forward CEF to `udp://HOST:PORT`, `tcp://HOST:PORT`, or `kafka://BROKER:PORT/TOPIC` (needs the `kafka` extra). |
+| `--eps N` | Rate-limit `--send` to at most N events per second. |
 | `--multiprocess` | Convert lines using a process pool. |
 | `--pool-size N` | Worker count for `--multiprocess` (default: CPU count minus one). |
+| `--validate` | Check CEF extensions against the ArcSight dictionary; violations are logged as warnings. |
+| `--strict` | Like `--validate`, but exit with an error on type or length violations. |
 | `--log-level LEVEL` | Python logging level (default `WARNING`). |
+| `--version` | Print the version, copyright, license and author, then exit. |
 
 `python -m syslogcef` is equivalent to the `syslogcef` entry point.
 
@@ -148,7 +176,8 @@ cef = to_cef(normalized, mapping="my_mapping.json")
 ```
 
 Bundled mappings are importable from `syslogcef.mappings` (`CISCO_ASA`,
-`CISCO_IOS`, `F5`, `LINUX`, `VMWARE`, or `load_mapping(name)`).
+`CISCO_IOS`, `F5`, `FORTINET`, `LINUX`, `SOPHOS`, `VMWARE`, or
+`load_mapping(name)`).
 
 ## Mapping Files
 
@@ -168,7 +197,7 @@ normalized event's fields:
     "src": "%(src)s",
     "dst": "%(dst)s",
     "cs1Label": "rawEvent",
-    "cs1": "%(raw_kv)s"
+    "cs1": "%(raw)s"
   }
 }
 ```
@@ -178,7 +207,8 @@ normalized event's fields:
 - `severity_map` translates syslog severity (0-7) to CEF severity (0-10);
   unmapped values pass through.
 - `extensions` maps CEF extension keys to templates. Extensions that
-  resolve to an empty value are omitted.
+  resolve to an empty value are omitted, and so is a custom-field label
+  (`cs1Label`, `cn1Label`, ...) whose paired value is omitted.
 - Available template fields include `host`, `app`, `pid`, `msgid`, `msg`,
   `message_short` (first 120 characters), `raw`, `raw_kv`, `event_code`,
   `facility`, `severity`, `ts`, plus every key=value pair extracted from
@@ -190,6 +220,18 @@ are validated before rendering; malformed templates, severity maps, and CEF
 extension keys fail with a configuration error instead of corrupting a record.
 See [docs/cef_fields.md](docs/cef_fields.md) for the full CEF extension
 dictionary.
+
+## Timestamps without a year
+
+RFC3164, journald short, Cisco console lines and many device formats
+stamp `Jan  1 12:34:56` with no year. syslogcef dates such a timestamp to
+its most recent occurrence that is not more than one day ahead of the
+current time: log lines describe events that already happened. A `Jan 1`
+line converted in November is dated January of the current year, while a
+line stamped just after midnight on New Year's Eve (a sender clock or
+timezone slightly ahead) lands in the new year. Pass `now=` to
+`parse_syslog`/`convert_line` to date archived files relative to when
+they were written.
 
 ## Field Dictionary
 
@@ -242,9 +284,9 @@ syslogcef acme.log --patterns /etc/syslogcef/patterns.json
 - Named groups map to event fields: `pri`, `host`, `app`, `pid`,
   `msgid`, `msg`, and `ts`.
 - A `ts` group requires `timestamp_format`: a strptime format,
-  `iso8601`, or `epoch`. Yearless formats get the same year-rollover
-  inference as the built-in parsers; an unparseable timestamp never
-  drops the event.
+  `iso8601`, or `epoch`. Yearless formats get the same year inference
+  as the built-in parsers (see "Timestamps without a year" below); an
+  unparseable timestamp never drops the event.
 - `priority` is `"after"` (default: tried after the built-ins, before
   the adaptive fallback) or `"before"` (tried first, overriding
   built-ins).
@@ -374,6 +416,23 @@ pytest
 
 Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Notable
 changes are tracked in [CHANGELOG.md](CHANGELOG.md).
+
+## Citation
+
+If you use syslog2cef in research or published work, please cite it. The
+metadata is in [CITATION.cff](CITATION.cff), and GitHub's "Cite this
+repository" button produces APA and BibTeX from it.
+
+```bibtex
+@software{suliman_syslog2cef,
+  author  = {Suliman, Tamir},
+  title   = {syslog2cef: Convert syslog to ArcSight Common Event Format (CEF)},
+  version = {0.4.1},
+  year    = {2026},
+  url     = {https://github.com/allamiro/syslog2cef},
+  license = {MIT}
+}
+```
 
 ## License
 

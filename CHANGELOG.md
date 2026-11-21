@@ -7,19 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.3.4] - 2026-08-12
-
-### Fixed
-
-- COPR builds no longer fail after a version bump. The COPR project builds
-  every push to `main` with rpkg, and the spec's `Source0` is the PyPI sdist,
-  which does not exist yet when the "Bump version" commit lands on `main`
-  (the release workflow publishes it a few minutes later), so every webhook
-  build of a new version failed downloading it. When rpkg preprocesses the
-  spec, a project macro (`packaging/rpm/rpkg.macros`, registered by
-  `packaging/rpm/rpkg.conf`) now generates that tarball from the git
-  checkout, so COPR builds package the pushed commit and never depend on
-  PyPI. The spec is unchanged for plain `rpmbuild` and the release workflow.
+## [0.4.1] - 2026-11-21
 
 ### Changed
 
@@ -45,6 +33,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The signing keys keep their filenames and UID (`RPM-GPG-KEY-syslogcef`,
   `packaging/apk/syslogcef.rsa.pub`, "syslogcef release signing"): renaming
   them would invalidate verification for anyone who already imported them.
+
+### Fixed
+
+- `python -m syslogcef --help` reports `usage: syslogcef` instead of
+  `usage: __main__.py`.
+
+## [0.4.0] - 2026-11-21
+
+This release changes emitted CEF in two ways that downstream SIEM content
+may depend on: Cisco ASA records now carry the raw line in `cs1`, and
+yearless timestamps are dated in the past (see Fixed). Review parsers or
+rules that read ASA `cs1` or that relied on the previous year inference.
+
+### Added
+
+- `syslogcef --version` prints the version, copyright, license and author
+  in the GNU format (first line `syslogcef X.Y.Z`); the version is also
+  available as `syslogcef.__version__`. The man page gains `--version`,
+  `--help` and a COPYRIGHT section. Conversion output is unchanged: stdout
+  still carries only CEF records.
+- `CITATION.cff` with software citation metadata, so GitHub offers "Cite
+  this repository"; the README has a matching BibTeX entry and status badges.
+- Per-version Python classifiers (3.9 to 3.14) in the package metadata.
+
+### Fixed
+
+- Timestamps without a year are no longer dated into the next year (#112).
+  The year came from a symmetric 180-day window around the current time, so
+  converting a `Jan  1` line in November produced next January. A yearless
+  timestamp now takes its most recent occurrence no more than one day ahead
+  of the current time, which still handles a line stamped just after
+  midnight on New Year's Eve. The built-in parsers, the adaptive parser and
+  custom `--patterns` share the rule, and a yearless Feb 29 resolves to the
+  last leap day in the past rather than the nearest one.
+- The Cisco ASA mapping no longer emits `cs1Label=rawEvent` without a `cs1`
+  value (#111). Its `cs1` came from the message's key=value pairs, which most
+  ASA messages do not have, so the value was dropped while the constant label
+  stayed. `cs1` now carries the raw line, like every other bundled mapping.
+  More generally, a custom-field label (`cs1Label`, `cn1Label`,
+  `flexString1Label`, ...) is now dropped whenever its paired value resolves
+  empty, so a mapping can no longer produce a label that describes nothing.
+- COPR builds no longer fail after a version bump. The COPR project builds
+  every push to `main` with rpkg, and the spec's `Source0` is the PyPI sdist,
+  which does not exist yet when the "Bump version" commit lands on `main`
+  (the release workflow publishes it a few minutes later), so every webhook
+  build of a new version failed downloading it. When rpkg preprocesses the
+  spec, a project macro (`packaging/rpm/rpkg.macros`, registered by
+  `packaging/rpm/rpkg.conf`) now generates that tarball from the git
+  checkout, so COPR builds package the pushed commit and never depend on
+  PyPI. The spec is unchanged for plain `rpmbuild` and the release workflow.
 
 ## [0.3.3] - 2026-08-12
 
@@ -399,8 +437,9 @@ Initial release.
 - `--tail` now follows all given input files instead of blocking on the
   first one.
 
-[Unreleased]: https://github.com/allamiro/syslog2cef/compare/v0.3.4...HEAD
-[0.3.4]: https://github.com/allamiro/syslog2cef/compare/v0.3.3...v0.3.4
+[Unreleased]: https://github.com/allamiro/syslog2cef/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/allamiro/syslog2cef/compare/v0.4.0...v0.4.1
+[0.4.0]: https://github.com/allamiro/syslog2cef/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/allamiro/syslog2cef/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/allamiro/syslog2cef/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/allamiro/syslog2cef/compare/v0.3.0...v0.3.1

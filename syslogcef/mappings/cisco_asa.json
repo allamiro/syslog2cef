@@ -21,6 +21,6 @@
     "dpt": "%(dpt)s",
     "proto": "%(protocol)s",
     "cs1Label": "rawEvent",
-    "cs1": "%(raw_kv)s"
+    "cs1": "%(raw)s"
   }
 }

@@ -1,0 +1,20 @@
+{
+  "deviceVendor": "OpenBSD",
+  "deviceProduct": "OpenSSH",
+  "deviceVersion": "auto",
+  "eventClassId": "sshd.%(outcome)s",
+  "name": "%(message_short)s",
+  "extensions": {
+    "src": "%(src)s",
+    "spt": "%(spt)s",
+    "suser": "%(suser)s",
+    "outcome": "%(outcome)s",
+    "shost": "%(host)s",
+    "sproc": "%(app)s",
+    "dvcpid": "%(dvcpid)s",
+    "cs2Label": "authMethod",
+    "cs2": "%(auth_method)s",
+    "cs1Label": "rawEvent",
+    "cs1": "%(raw)s"
+  }
+}

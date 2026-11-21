@@ -38,6 +38,12 @@ class ParsedEvent:
     msg: str = ""
     raw: str = ""
     source_hint: str = "unknown"
+    # Extra named groups captured by custom patterns (line and msg kind).
+    fields: Dict[str, str] = field(default_factory=dict)
+    # Name of the custom line pattern that parsed the line, if any.
+    pattern: Optional[str] = None
+    # Name of the custom msg pattern that matched the message, if any.
+    msg_pattern: Optional[str] = None
 
 
 RFC3164_RE = re.compile(

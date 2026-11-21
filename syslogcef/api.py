@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping, Optional, Tuple
 
 from .parsers import ParsedEvent, ParserError, autodetect_and_parse
 from .normalizer import NormalizedEvent, _extract_event_code, normalize
@@ -109,8 +109,22 @@ def parse_syslog(
         Optional datetime used when inferring missing year information.
     """
 
+    from . import custom
+
     parsed = autodetect_and_parse(line, mode=mode, now=now)
-    return parsed
+    # Message-level patterns refine whatever parsed the line (built-in,
+    # line pattern, adaptive, or a forced --mode).
+    return custom.apply_msg_patterns(parsed)
+
+
+def _parse_envelope(line: str, *, mode: Optional[str], now: Optional[datetime]) -> ParsedEvent:
+    """Parse a line without applying msg patterns.
+
+    ``StreamConverter`` completes continuation lines (inherited app, host,
+    stripped message) before choosing a msg pattern, so that the choice
+    sees the final event exactly once.
+    """
+    return autodetect_and_parse(line, mode=mode, now=now)
 
 
 def normalize_event(event: ParsedEvent | NormalizedEvent) -> NormalizedEvent:
@@ -206,7 +220,15 @@ def to_cef(
     """
 
     if mapping is None:
-        mapping_data = _guess_mapping(event)
+        # A mapping declared by the matching pattern beats the heuristic;
+        # an explicit mapping (--mapping) always wins over both.
+        from . import custom
+
+        pattern_mapping = custom.mapping_for(event)
+        if pattern_mapping is not None:
+            mapping_data = pattern_mapping[1]
+        else:
+            mapping_data = _guess_mapping(event)
     else:
         mapping_data = _load_mapping(mapping)
     cef_event = build_cef(event, mapping_data, validate=validate, strict=strict)
@@ -266,10 +288,16 @@ class StreamConverter:
         self._contexts: dict[str, ParsedEvent] = {}
 
     def convert(self, line: str, *, now: Optional[datetime] = None, source: str = "") -> str:
+        return self.convert_event(line, now=now, source=source)[0]
+
+    def convert_event(
+        self, line: str, *, now: Optional[datetime] = None, source: str = ""
+    ) -> Tuple[str, NormalizedEvent]:
+        """Like :meth:`convert`, but also return the normalized event."""
         ctx = self._contexts.get(source)
         is_continuation = line[:1] in ("\t", " ") and ctx is not None
         try:
-            parsed = parse_syslog(line, mode=self.mode, now=now)
+            parsed = _parse_envelope(line, mode=self.mode, now=now)
         except ParserError:
             if not is_continuation:
                 raise
@@ -306,8 +334,16 @@ class StreamConverter:
             # Only a line whose host was actually parsed (not the
             # guessed fallback) may become continuation context.
             self._contexts[source] = parsed
+        # Choose the msg pattern only now, once the event is complete: a
+        # continuation line has inherited its app and lost its indentation,
+        # so app-filtered patterns are judged in load order against the
+        # same event a non-continuation line would present.
+        from . import custom
+
+        custom.apply_msg_patterns(parsed)
         normalized = normalize_event(parsed)
-        return to_cef(normalized, self.mapping, validate=self.validate, strict=self.strict)
+        cef = to_cef(normalized, self.mapping, validate=self.validate, strict=self.strict)
+        return cef, normalized
 
 
 def _guess_mapping(event: NormalizedEvent) -> Mapping[str, Any]:

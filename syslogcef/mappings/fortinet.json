@@ -5,6 +5,7 @@
   "eventClassId": "fortinet.%(logid)s",
   "name": "%(message_short)s",
   "extensions": {
+    "shost": "",
     "dvchost": "%(devname)s",
     "src": "%(srcip)s",
     "dst": "%(dstip)s",

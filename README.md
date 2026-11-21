@@ -103,9 +103,10 @@ The COPR project keeps its original name (`allamiro/syslogcef`) so that
 already-enabled repositories keep working; the package it builds is
 `syslog2cef`.
 
-Every asset ships with a detached GPG signature (`.asc`) and is listed in
-a signed `SHA256SUMS` file; RPMs additionally carry embedded `rpmsign`
-signatures. The public key is committed at
+Every release asset is listed in a signed `SHA256SUMS` file. The RPMs
+carry an embedded `rpmsign` signature (verify with `rpm --checksig`)
+rather than a detached one; every other asset ships with a detached GPG
+signature (`.asc`). The public key is committed at
 [packaging/rpm/RPM-GPG-KEY-syslogcef](packaging/rpm/RPM-GPG-KEY-syslogcef).
 
 ## Command Line Usage

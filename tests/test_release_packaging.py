@@ -187,3 +187,15 @@ def test_docs_use_the_renamed_artifact_filenames(doc):
     text = _checkout_file(doc).read_text()
     stale = re.findall(r"syslogcef-(?:\*|X\.Y|\d)[^\s`]*", text)
     assert not stale, f"{doc} references old artifact names: {stale}"
+
+
+def test_readme_signature_claim_matches_the_release_workflow():
+    workflow = _checkout_file(".github/workflows/release.yml").read_text()
+    readme = _checkout_file("README.md").read_text()
+    detached_globs = re.findall(r"for artifact in ([^;]+); do\s+gpg", workflow)
+    assert detached_globs
+    rpm_has_detached = any("*.rpm" in globs for globs in detached_globs)
+    assert not rpm_has_detached, "update the README signature section"
+    # RPMs carry an embedded rpmsign signature, not a detached .asc.
+    assert "Every asset ships with a detached" not in readme
+    assert "rpm --checksig" in readme

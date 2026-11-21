@@ -11,8 +11,10 @@ consumers. They are derived from the ArcSight Extension Dictionary.
   fields with a label (e.g. `cs1` + `cs1Label`), as syslog2cef's bundled
   mappings do for the raw event text.
 - **Version differences**: in CEF 0.1, `in`/`out` (bytesIn/bytesOut) are
-  Integer and all IP address fields are IPv4-only; from CEF 1.0 onward
-  they accept Long values and IPv6 addresses respectively. Note the
+  Integer and the general IP address fields (`src`, `dst`, `dvc`, and
+  the translated addresses) are IPv4-only, with IPv6 carried in the
+  dedicated `c6a1`, `c6a3`, and `c6a4` fields; from CEF 1.0 onward they
+  accept Long values and IPv6 addresses respectively. Note the
   `CEF:0` wire prefix does not by itself select a dictionary version —
   integrations on the 1.x dictionary still emit `CEF:0` headers.
   syslog2cef *chooses* to validate against the conservative rules for

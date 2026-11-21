@@ -263,6 +263,15 @@ def test_man_page_source_field_names_the_project():
     assert '"syslog2cef ' in first
 
 
+def test_man_page_version_matches_the_package():
+    # The .TH version is edited by hand at release time; an installed man
+    # page must not report a different version than the package.
+    from syslogcef import __version__
+
+    first = _checkout_file("packaging/rpm/syslogcef.1").read_text().splitlines()[0]
+    assert f'"syslog2cef {__version__}"' in first
+
+
 def test_external_resource_names_are_not_renamed():
     """Names owned by external services keep their original spelling.
 

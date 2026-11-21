@@ -47,7 +47,7 @@
   <g opacity="0">
     <animate attributeName="opacity" dur="21s" repeatCount="indefinite"
       keyTimes="0;0.66;0.67;0.985;1" values="0;0;1;1;0"/>
-    <text x="30" y="80" font-size="14"><tspan fill="#34d399">$</tspan><tspan fill="#e2e8f0" dx="8">syslogcef /var/log/asa.log /var/log/messages --tail --append -o events.cef</tspan></text>
+    <text x="30" y="80" font-size="14"><tspan fill="#34d399">$</tspan><tspan fill="#e2e8f0" dx="8">syslogcef /var/log/asa.log /var/log/messages --tail</tspan></text>
     <g opacity="0">
       <animate attributeName="opacity" dur="21s" repeatCount="indefinite"
         keyTimes="0;0.66;0.71;0.985;1" values="0;0;1;1;0"/>

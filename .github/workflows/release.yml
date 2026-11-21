@@ -322,7 +322,10 @@ jobs:
 
   publish-pypi:
     name: Publish to PyPI
-    needs: [build-python]
+    # A PyPI version can never be replaced, so publish only once every
+    # other artifact for the tag has built; a failed RPM, Debian, APK or
+    # image build can then be fixed and the same version re-released.
+    needs: [build-python, build-rpm, build-standalone, build-apk, build-docker]
     runs-on: ubuntu-latest
     environment: pypi
     permissions:

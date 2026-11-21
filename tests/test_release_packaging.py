@@ -45,3 +45,10 @@ def test_container_image_is_pushed_only_after_the_release_builds():
     assert RELEASE_BUILD_JOBS <= _needs(jobs["build-docker"])
     # ...and the GitHub release, which promises an image, waits for it.
     assert "build-docker" in _needs(jobs["github-release"])
+
+
+def test_pypi_publishes_only_after_every_release_build():
+    # PyPI versions are immutable: publishing before a failing RPM, Debian,
+    # APK or image build leaves a version that can never be re-released.
+    needs = _needs(_jobs(".github/workflows/release.yml")["publish-pypi"])
+    assert RELEASE_BUILD_JOBS | {"build-docker"} <= needs

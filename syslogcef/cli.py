@@ -358,7 +358,16 @@ def process_lines(
     validate: bool = False,
     strict: bool = False,
     pattern_files: Optional[list] = None,
+    explain: bool = False,
+    stats: Any = None,
 ) -> Iterator[str]:
+    """Convert lines to CEF records.
+
+    With ``explain`` each item is an ``--explain`` block instead of a bare
+    CEF record (blocks after the first start with a blank line). With
+    ``stats`` (a :class:`syslogcef.explain.Stats`) every converted event is
+    counted. Neither is available with ``use_multiprocessing``.
+    """
     if use_multiprocessing:
         size = pool_size or max(1, cpu_count() - 1)
         with Pool(size, initializer=_mp_load_patterns, initargs=(pattern_files or [],)) as pool:
@@ -371,9 +380,24 @@ def process_lines(
         # source so interleaved files never cross-inherit. Unavailable
         # under --multiprocess, where workers cannot share line order.
         converter = StreamConverter(mode=mode, mapping=mapping, validate=validate, strict=strict)
-        for item in lines:
+        if not (explain or stats is not None):
+            for item in lines:
+                source, line = _split_item(item)
+                yield converter.convert(line, source=source)
+            return
+
+        from .explain import format_explain, mapping_label
+
+        for index, item in enumerate(lines, start=1):
             source, line = _split_item(item)
-            yield converter.convert(line, source=source)
+            cef, event = converter.convert_event(line, source=source)
+            if stats is not None:
+                stats.add(event)
+            if explain:
+                block = format_explain(index, event, cef, mapping_label(event, converter.mapping))
+                yield block if index == 1 else "\n" + block
+            else:
+                yield cef
 
 
 def _optional_path(value: str) -> Optional[Path]:
@@ -419,6 +443,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--pool-size", type=int, help="Number of worker processes for --multiprocess")
     parser.add_argument("--validate", action="store_true", help="Validate CEF extensions against the ArcSight dictionary; violations are logged as warnings")
     parser.add_argument("--strict", action="store_true", help="Like --validate, but exit with an error on type/length violations")
+    parser.add_argument("--explain", action="store_true", help="Instead of bare CEF, print one block per input line showing the parser, matching patterns, mapping, extracted fields and the CEF record (not with --send, --output or --multiprocess)")
+    parser.add_argument("--stats", action="store_true", help="When input ends (or on interrupt), print to stderr how many lines each parser and msg pattern matched, plus samples of unmatched lines (not with --multiprocess)")
     parser.add_argument("--log-level", default="WARNING", help="Logging level")
     parser.add_argument(
         "--version",
@@ -443,6 +469,12 @@ def main(argv: Optional[list[str]] = None) -> int:
         parser.error("--listen replaces file input; remove the positional paths")
     if args.tail and not args.paths:
         parser.error("--tail requires input file paths")
+    if args.explain:
+        for flag, given in (("--send", args.send), ("--output", args.output), ("--multiprocess", args.multiprocess)):
+            if given:
+                parser.error(f"--explain cannot be combined with {flag}")
+    if args.stats and args.multiprocess:
+        parser.error("--stats cannot be combined with --multiprocess")
 
     if args.output:
         try:
@@ -486,6 +518,12 @@ def main(argv: Optional[list[str]] = None) -> int:
         except (OSError, ValueError) as exc:
             parser.error(f"invalid --mapping: {exc}")
 
+    stats = None
+    if args.stats:
+        from .explain import Stats
+
+        stats = Stats()
+
     outputs: Iterator[str]
     if args.listen:
         from .net import listen_lines, parse_endpoint
@@ -495,11 +533,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         except ValueError as exc:
             parser.error(str(exc))
         lines = listen_lines(proto, host, port)
-        outputs = process_lines(lines, mode=args.mode, mapping=mapping, use_multiprocessing=args.multiprocess, pool_size=args.pool_size, validate=args.validate or args.strict, strict=args.strict, pattern_files=args.patterns)
+        outputs = process_lines(lines, mode=args.mode, mapping=mapping, use_multiprocessing=args.multiprocess, pool_size=args.pool_size, validate=args.validate or args.strict, strict=args.strict, pattern_files=args.patterns, explain=args.explain, stats=stats)
     elif args.tail and args.paths:
-        outputs = process_lines(follow_files(args.paths, tag_sources=True), mode=args.mode, mapping=mapping, use_multiprocessing=args.multiprocess, pool_size=args.pool_size, validate=args.validate or args.strict, strict=args.strict, pattern_files=args.patterns)
+        outputs = process_lines(follow_files(args.paths, tag_sources=True), mode=args.mode, mapping=mapping, use_multiprocessing=args.multiprocess, pool_size=args.pool_size, validate=args.validate or args.strict, strict=args.strict, pattern_files=args.patterns, explain=args.explain, stats=stats)
     else:
-        outputs = process_lines(iter_lines_from_sources(args.paths, tag_sources=True), mode=args.mode, mapping=mapping, use_multiprocessing=args.multiprocess, pool_size=args.pool_size, validate=args.validate or args.strict, strict=args.strict, pattern_files=args.patterns)
+        outputs = process_lines(iter_lines_from_sources(args.paths, tag_sources=True), mode=args.mode, mapping=mapping, use_multiprocessing=args.multiprocess, pool_size=args.pool_size, validate=args.validate or args.strict, strict=args.strict, pattern_files=args.patterns, explain=args.explain, stats=stats)
 
     sender = None
     if args.send:
@@ -534,6 +572,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     finally:
         if sender:
             sender.close()
+        if stats is not None:
+            # Also reached on KeyboardInterrupt, so --tail/--listen runs
+            # report their counts when stopped.
+            print(stats.format(), file=sys.stderr, flush=True)
     return 0
 
 

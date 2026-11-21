@@ -67,3 +67,17 @@ def test_unsatisfiable_conversion_still_degrades_gracefully():
     cef = convert_line(line, mapping={"extensions": {"dpt": "%(dpt)d"}})
     assert cef.startswith("CEF:0|")
     assert "dpt=" not in cef
+
+
+def test_unsatisfiable_template_warns_once_not_per_event(caplog, monkeypatch):
+    # A template that fails for every event must not log a warning per
+    # converted line: on a long or tailed stream that floods the log.
+    from syslogcef import cef as cef_module
+
+    monkeypatch.setattr(cef_module, "_warned_templates", set())
+    mapping = {"extensions": {"dpt": "%(dpt)d"}}
+    with caplog.at_level("DEBUG", logger="syslogcef.cef"):
+        for port in ("a", "b", "c"):
+            convert_line(f"<13>Jan  2 10:00:00 web01 sshd[1]: dstport={port}", mapping=mapping)
+    records = [r for r in caplog.records if "%(dpt)d" in r.getMessage()]
+    assert [r.levelname for r in records] == ["WARNING", "DEBUG", "DEBUG"]

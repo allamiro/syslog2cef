@@ -109,8 +109,12 @@ def parse_syslog(
         Optional datetime used when inferring missing year information.
     """
 
+    from . import custom
+
     parsed = autodetect_and_parse(line, mode=mode, now=now)
-    return parsed
+    # Message-level patterns refine whatever parsed the line (built-in,
+    # line pattern, adaptive, or a forced --mode).
+    return custom.apply_msg_patterns(parsed)
 
 
 def normalize_event(event: ParsedEvent | NormalizedEvent) -> NormalizedEvent:
@@ -206,7 +210,15 @@ def to_cef(
     """
 
     if mapping is None:
-        mapping_data = _guess_mapping(event)
+        # A mapping declared by the matching pattern beats the heuristic;
+        # an explicit mapping (--mapping) always wins over both.
+        from . import custom
+
+        pattern_mapping = custom.mapping_for(event)
+        if pattern_mapping is not None:
+            mapping_data = pattern_mapping[1]
+        else:
+            mapping_data = _guess_mapping(event)
     else:
         mapping_data = _load_mapping(mapping)
     cef_event = build_cef(event, mapping_data, validate=validate, strict=strict)

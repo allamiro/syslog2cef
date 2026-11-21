@@ -87,3 +87,27 @@ def test_timestamp_values_actually_parsed():
     assert bad2 and bad2[0].fatal
     ok = validate_extensions({"rt": "Feb 29 2020 12:00:00"})
     assert [f for f in ok if f.fatal] == []
+
+
+@pytest.fixture
+def non_english_time_locale():
+    import locale
+
+    previous = locale.setlocale(locale.LC_TIME)
+    for name in ("de_DE.UTF-8", "de_DE.utf8", "fr_FR.UTF-8", "fr_FR.utf8"):
+        try:
+            locale.setlocale(locale.LC_TIME, name)
+        except locale.Error:
+            continue
+        yield name
+        locale.setlocale(locale.LC_TIME, previous)
+        return
+    pytest.skip("no German or French locale installed")
+
+
+def test_timestamp_months_are_english_whatever_the_locale(non_english_time_locale):
+    # %b follows LC_TIME, so "Mar", "May" and "Dec" failed under de_DE
+    # (Mär, Mai, Dez). CEF's MMM is always the English abbreviation.
+    for value in ("Mar 17 2020 08:52:10", "May 7 2020 08:52:10", "dec 17 2020 08:52:10"):
+        assert [f for f in validate_extensions({"rt": value}) if f.fatal] == []
+    assert validate_extensions({"rt": "Mär 17 2020 08:52:10"})[0].fatal

@@ -233,6 +233,25 @@ class TestDvcpidNumericOnly:
         )
         assert cef.startswith("CEF:0|")
 
+    def test_kv_pid_emits_dvcpid_when_header_has_none(self):
+        # A headerless line has no parsed PID; its pid= field is the
+        # effective PID, which %(pid)s rendered before the alias existed.
+        from syslogcef import convert_line
+        from syslogcef.mappings import LINUX
+
+        assert "dvcpid=123" in convert_line("pid=123 action=test", mapping=LINUX)
+        cef = convert_line("pid=worker-A action=test", mapping=LINUX, strict=True)
+        assert "dvcpid=" not in cef
+
+    def test_parsed_pid_wins_over_kv_pid(self):
+        from syslogcef import convert_line
+        from syslogcef.mappings import LINUX
+
+        cef = convert_line(
+            "<34>1 2026-07-20T03:23:05Z host1 myapp 4711 ID47 - pid=99", mapping=LINUX
+        )
+        assert "dvcpid=4711" in cef
+
 
 class TestSyslogHostIsSource:
     """The syslog HOSTNAME is the device that generated the event, so it

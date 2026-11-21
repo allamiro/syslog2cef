@@ -12,10 +12,12 @@ NOW = datetime(2023, 7, 2, tzinfo=timezone.utc)
 
 def test_parse_rsyslog_json():
     line = '{"timestamp": "2023-07-01T12:00:00Z", "hostname": "web01", "programname": "nginx", "pid": 42, "msg": "GET /index.html", "pri": "14"}'
-    result = autodetect_and_parse(line)
-    assert result.source_hint in {"rsyslog", "journald"}
-    assert result.host == "web01"
-    assert result.msg == "GET /index.html"
+    for result in (autodetect_and_parse(line), autodetect_and_parse(line, mode="rsyslog_json")):
+        assert result.source_hint == "rsyslog"
+        assert result.host == "web01"
+        assert result.app == "nginx"  # programname is an rsyslog-only field
+        assert result.pid == "42"
+        assert result.msg == "GET /index.html"
 
 
 def test_parse_rsyslog_file_format():

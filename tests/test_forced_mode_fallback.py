@@ -9,10 +9,11 @@ from __future__ import annotations
 
 import json
 import logging
-import select
+import queue
 import socket
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -153,22 +154,33 @@ def test_cli_listen_forced_mode_keeps_running_after_garbage_datagram():
         text=True,
         cwd=REPO_ROOT,
     )
+    # A reader thread drains stdout into a queue: select() on a buffered
+    # text pipe misses records already pulled into Python's buffer.
+    records: "queue.Queue[str]" = queue.Queue()
+
+    def drain() -> None:
+        for record in proc.stdout:
+            records.put(record)
+
+    threading.Thread(target=drain, daemon=True).start()
     lines = []
     try:
         deadline = time.monotonic() + 20
+        next_send = 0.0
         # Resend the garbage-then-valid pair until both records come back:
-        # datagrams sent before the listener binds are lost.
+        # datagrams sent before the listener binds are lost. A repeated
+        # rejection is logged at DEBUG, so the warning count stays at one.
         while not (any("shost=mymachine" in line for line in lines) and any(f"msg={GARBAGE}" in line for line in lines)):
             assert time.monotonic() < deadline, f"no output from syslogcef: {lines!r}"
             assert proc.poll() is None, "syslogcef exited after a rejected datagram"
-            if not lines:
+            if time.monotonic() >= next_send:
                 sender.sendto(GARBAGE.encode("utf-8"), ("127.0.0.1", port))
                 sender.sendto(VALID.encode("utf-8"), ("127.0.0.1", port))
-            ready, _, _ = select.select([proc.stdout], [], [], 0.2)
-            if ready:
-                line = proc.stdout.readline()
-                assert line, "syslogcef exited early"
-                lines.append(line)
+                next_send = time.monotonic() + 0.5
+            try:
+                lines.append(records.get(timeout=0.2))
+            except queue.Empty:
+                pass
         # Still listening after the rejected datagram.
         assert proc.poll() is None
     finally:

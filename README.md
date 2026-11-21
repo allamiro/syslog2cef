@@ -5,7 +5,7 @@
 <p align="center">
   <a href="https://github.com/allamiro/syslog2cef/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/allamiro/syslog2cef/ci.yml?branch=main&label=CI" alt="CI status"></a>
   <a href="https://pypi.org/project/syslog2cef/"><img src="https://img.shields.io/pypi/v/syslog2cef" alt="PyPI version"></a>
-  <a href="https://pypi.org/project/syslog2cef/"><img src="https://img.shields.io/pypi/pyversions/syslog2cef" alt="Supported Python versions"></a>
+  <a href="https://pypi.org/project/syslog2cef/"><img src="https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2Fallamiro%2Fsyslog2cef%2Fmain%2Fpyproject.toml" alt="Python 3.9 or later"></a>
   <a href="https://pypistats.org/packages/syslog2cef"><img src="https://img.shields.io/pypi/dm/syslog2cef" alt="PyPI downloads per month"></a>
   <a href="https://copr.fedorainfracloud.org/coprs/allamiro/syslogcef/"><img src="https://copr.fedorainfracloud.org/coprs/allamiro/syslogcef/package/syslogcef/status_image/last_build.png" alt="COPR build status"></a>
   <a href="https://github.com/allamiro/syslog2cef/pkgs/container/syslog2cef"><img src="https://img.shields.io/badge/container-ghcr.io-blue?logo=docker" alt="Container image on ghcr.io"></a>

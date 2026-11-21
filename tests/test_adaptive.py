@@ -159,6 +159,16 @@ def test_cisco_milliseconds_preserved():
     assert ev.ts.microsecond == 272000
 
 
+@pytest.mark.parametrize(
+    "frac, micro",
+    [(".0157", 15700), (".1234567", 123456), (".000001", 1), (".5", 500000)],
+)
+def test_cisco_fraction_converted_without_float_rounding(frac, micro):
+    # float(".0157") * 1e6 is 15699.999..., which int() truncated to 15699.
+    line = f"000123: Feb  8 2024 04:00:47{frac}: %SEC-6-IPACCESSLOGP: list 100 denied tcp"
+    assert parse_syslog(line).ts.microsecond == micro
+
+
 def test_adaptive_mon_day_year_rollover():
     import re
     from datetime import datetime, timezone

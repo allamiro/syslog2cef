@@ -544,7 +544,9 @@ def parse_cisco_seq(line: str, *, now: Optional[datetime]) -> ParsedEvent | None
     facility, severity = convert_pri(pri)
     month = month_abbr_to_int(gd["month"])
     hour, minute, second = map(int, gd["time"].split(":"))
-    microsecond = int(float(gd["frac"]) * 1_000_000) if gd.get("frac") else 0
+    # Pad/truncate the digits to six places; going through float() loses a
+    # microsecond on values such as ".0157".
+    microsecond = int(gd["frac"][1:7].ljust(6, "0")) if gd.get("frac") else 0
     if gd.get("year"):
         ts = datetime(int(gd["year"]), month, int(gd["day"]), hour, minute, second, microsecond, tzinfo=timezone.utc)
     else:

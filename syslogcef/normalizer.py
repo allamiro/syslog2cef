@@ -145,16 +145,15 @@ def _derive_common_fields(event: NormalizedEvent) -> None:
         if canonical not in event.kv and alias in event.kv:
             event.kv[canonical] = event.kv[alias]
 
-    if "event_code" not in event.kv:
-        code = _extract_event_code(event.msg)
-        if code:
-            event.kv["event_code"] = code
+    cisco_code = _extract_event_code(event.msg)
+    if cisco_code and "event_code" not in event.kv:
+        event.kv["event_code"] = cisco_code
 
     # Cisco codes embed the severity digit (%SEC-6-IPACCESSLOGRP -> 6);
-    # use it when the line carried no PRI.
-    if event.severity is None:
-        code = event.kv.get("event_code", "")
-        sev_match = re.search(r"-(\d)-", code)
+    # use it when the line carried no PRI. Only a code in Cisco syntax
+    # counts: an application's own event_code=APP-0-CRASH is not severity 0.
+    if event.severity is None and cisco_code:
+        sev_match = re.search(r"-(\d)-", cisco_code)
         if sev_match:
             event.severity = int(sev_match.group(1))
 

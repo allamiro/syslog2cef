@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Mapping, Optional
 
 from .parsers import ParsedEvent, ParserError, autodetect_and_parse
-from .normalizer import NormalizedEvent, normalize
+from .normalizer import NormalizedEvent, _extract_event_code, normalize
 from .utils import sanitize_message
 from .mappings import CISCO_ASA, CISCO_IOS, F5, FORTINET, LINUX, SOPHOS, VMWARE
 from .cef import HEADER_KEYS, CEFEvent, build_cef
@@ -313,9 +313,11 @@ class StreamConverter:
 def _guess_mapping(event: NormalizedEvent) -> Mapping[str, Any]:
     msg_upper = event.msg.upper()
     app_upper = (event.app or "").upper()
-    event_code = event.kv.get("event_code", "")
+    # Only a %FAC-SEV-MNEMONIC code in the message identifies Cisco; a plain
+    # event_code= field from any other application must not.
+    cisco_code = _extract_event_code(event.msg) or ""
 
-    if "%ASA-" in msg_upper or "ASA" in app_upper or event_code.startswith(("ASA-", "FTD-")):
+    if "%ASA-" in msg_upper or "ASA" in app_upper or cisco_code.startswith(("ASA-", "FTD-")):
         return CISCO_ASA
     if "IOS" in app_upper or "%IOS-" in msg_upper:
         return CISCO_IOS
@@ -327,7 +329,7 @@ def _guess_mapping(event: NormalizedEvent) -> Mapping[str, Any]:
         return SOPHOS
     if "VMWARE" in msg_upper or "ESXI" in msg_upper or "VMWARE" in app_upper:
         return VMWARE
-    if event_code:
+    if cisco_code:
         # Other %FAC-SEV-MNEMONIC codes are Cisco IOS style.
         return CISCO_IOS
     return LINUX

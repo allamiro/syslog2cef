@@ -689,6 +689,8 @@ def test_shorthand_reserved_capture_name_is_rejected(tmp_path: Path):
         ({"name": "x", "regex": r"^(?P<facility>\d+) (?P<msg>.*)$"}, "reserved for derived fields"),
         ({"name": "x", "regex": r"(?P<rt>\d+)"}, "reserved for derived fields"),
         ({"name": "x", "regex": r"(?P<dvcpid>\d+)"}, "reserved for derived fields"),
+        ({"name": "x", "regex": r"(?P<device_host>\S+)"}, "reserved for derived fields"),
+        ({"name": "x", "match": "msg", "regex": r"(?P<device_host_long>\S+)"}, "reserved for derived fields"),
         ({"name": "x", "match": "msg", "regex": r"(?P<raw_kv>.*)"}, "reserved for derived fields"),
         ({"name": "x", "match": "msg", "regex": r"(?P<message_short>.*)"}, "reserved for derived fields"),
         ({"name": "x", "match": "msg", "regex": r"(?P<timestamp>.*)"}, "reserved for derived fields"),
@@ -893,7 +895,8 @@ OLD_STYLE_GOLDEN = [
     (
         "<134>Aug 11 07:00:00 fw %ASA-6-302013: Built outbound TCP connection",
         "CEF:0|Cisco|ASA|auto|asa.ASA-6-302013|%ASA-6-302013: Built outbound TCP connection|2|"
-        "msg=%ASA-6-302013: Built outbound TCP connection shost=fw rt=1786431600000 "
+        # The ASA mapping reports the syslog host as the device (#135).
+        "msg=%ASA-6-302013: Built outbound TCP connection rt=1786431600000 dvchost=fw "
         "cs1Label=rawEvent cs1=<134>Aug 11 07:00:00 fw %ASA-6-302013: Built outbound TCP connection",
     ),
 ]

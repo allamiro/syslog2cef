@@ -126,7 +126,41 @@ def normalize(event: ParsedEvent) -> NormalizedEvent:
     )
 
     _derive_common_fields(normalized)
+    _derive_device_host(normalized)
     return normalized
+
+
+def _effective_host(event: NormalizedEvent) -> str:
+    """The value ``%(host)s`` (and so the default ``shost``) resolves to.
+
+    Mirrors :meth:`NormalizedEvent.as_field_dict`: a parsed envelope host
+    wins; otherwise the last of sd, kv and extras that carries ``host``
+    (extras holds the "localhost" fallback for hostless local formats).
+    """
+    if event.host is not None and event.host != "":
+        return str(event.host)
+    for source in (event.extras, event.kv, event.sd):
+        if "host" in source:
+            value = source["host"]
+            return "" if value is None else str(value)
+    return ""
+
+
+def _derive_device_host(event: NormalizedEvent) -> None:
+    # Appliance mappings (ASA, IOS, F5) report the syslog host as the
+    # device (dvchost) rather than the source host (shost). dvchost is
+    # limited by the CEF dictionary (100 characters) while shost allows
+    # 1023, and a valid RFC 5424 FQDN can be longer than 100. Expose the
+    # host under exactly one of two names so a mapping can emit dvchost
+    # when it fits and keep the full value in shost when it does not:
+    # nothing is truncated and --strict never rejects a valid hostname.
+    from .dictionary import cef_keys
+
+    host = _effective_host(event)
+    max_len = cef_keys()["dvchost"][1]
+    fits = len(host) <= max_len
+    event.extras["device_host"] = host if fits else ""
+    event.extras["device_host_long"] = "" if fits else host
 
 
 def _derive_common_fields(event: NormalizedEvent) -> None:

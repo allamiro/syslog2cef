@@ -257,6 +257,9 @@ jobs:
     steps:
       - uses: actions/download-artifact@v8
         with:
+          # Only the package builds. build-docker also uploads a build
+          # record artifact (*.dockerbuild) that is not a release asset.
+          pattern: '*-dist'
           path: artifacts
           merge-multiple: true
 

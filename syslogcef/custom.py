@@ -146,7 +146,8 @@ def _parse_timestamp(text: str, fmt: str, *, now: Optional[datetime] = None) -> 
         return parse_iso8601(text)
     if fmt == "epoch":
         return datetime.fromtimestamp(float(text), tz=timezone.utc)
-    has_year = "%Y" in fmt or "%y" in fmt or "%G" in fmt
+    # Directive-aware, so an escaped "%%Y" is not taken for a year.
+    has_year = _validate_strptime_format(fmt)
     if has_year:
         parsed = datetime.strptime(text, fmt)
     else:

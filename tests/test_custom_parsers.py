@@ -369,3 +369,19 @@ def test_replacing_a_loaded_pattern_removes_it_from_auto_detection(tmp_path: Pat
     event = parse_syslog("ACME 2026-08-11 07:00:00 fw01 nat[42]: allowed tcp")
     assert event.source_hint != "custom:acme_fw"
     assert parse_syslog("MARK hi", mode="acme_fw").host == "marker"
+
+
+def test_escaped_percent_is_not_a_year_directive(tmp_path: Path):
+    # Review on #72: "%%Y" is a literal "%Y", so the format has no year and
+    # the year must be inferred instead of left at strptime's 1900.
+    load_patterns(
+        write_patterns(
+            tmp_path,
+            {"name": "literal", "regex": r"^L (?P<ts>%Y-\d{2}-\d{2}) (?P<msg>.*)$", "timestamp_format": "%%Y-%m-%d"},
+        )
+    )
+    parse = custom.get_registered("literal")
+
+    event = parse("L %Y-08-11 hello", now=datetime(2026, 11, 20, tzinfo=timezone.utc))
+
+    assert event.ts == datetime(2026, 8, 11, tzinfo=timezone.utc)

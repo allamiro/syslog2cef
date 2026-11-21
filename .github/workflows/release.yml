@@ -276,7 +276,7 @@ jobs:
     env:
       GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
     steps:
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true
@@ -314,7 +314,7 @@ jobs:
     env:
       PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
     steps:
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: python-dist
           path: dist

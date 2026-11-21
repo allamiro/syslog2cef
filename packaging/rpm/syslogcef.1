@@ -24,8 +24,9 @@ markers), ISO-timestamp syslog with PRI, and key=value streams
 analyzed adaptively: a timestamp shape and host candidate are located
 and a pattern for the layout is synthesized and cached. With
 auto-detection, unparseable lines never abort the stream; they fall
-back to a raw-message event. With a forced \fB\-\-mode\fR, a line that
-parser rejects stops the run with an error.
+back to a raw-message event. With a forced \fB\-\-mode\fR, a line the
+parser rejects is still converted as a raw-message event and a
+warning is logged; the stream never aborts.
 .PP
 Vendor mappings for Cisco ASA/IOS, F5 BIG-IP, Fortinet, Sophos,
 VMware, and generic Linux are bundled and selected automatically from
@@ -71,6 +72,11 @@ Force a specific parser instead of auto-detection. One of
 .BR kv ,
 or the name of a pattern loaded with
 .BR \-\-patterns .
+A line the parser rejects is converted as a raw-message event (no
+timestamp or host; the whole line is the message). The first such line
+is reported in a warning on standard error, later ones only at the
+.B DEBUG
+log level.
 .SS Conversion
 .TP
 .BI \-\-mapping " FILE"

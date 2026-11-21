@@ -426,9 +426,10 @@ For each input line:
 3. Line patterns with `"priority": "after"` (the default) are tried, in load
    order.
 4. The adaptive fallback handles anything left.
-5. After any successful parse (including a forced `--mode`), msg patterns
-   are tried against the message, in load order. The first one that matches
-   wins; the rest are skipped. A msg pattern with an `app` list is skipped
+5. After any successful parse (including a forced `--mode`, and a line a
+   forced `--mode` rejected, which is kept as a raw-message event), msg
+   patterns are tried against the message, in load order. The first one
+   that matches wins; the rest are skipped. A msg pattern with an `app` list is skipped
    for events whose program name is not in the list.
 
 The two kinds combine: a line pattern can read an unknown header, and a msg

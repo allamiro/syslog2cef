@@ -412,6 +412,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--mapping", type=str, help="Mapping JSON file")
     parser.add_argument("--patterns", action="append", metavar="FILE", help="JSON file of custom parser patterns (named regexes); may be given multiple times. See the man page for the format.")
     parser.add_argument("--tail", action="store_true", help="Follow file like tail -f")
+    parser.add_argument("--check-patterns", action="store_true", help="Run the examples in the --patterns files, print PASS/FAIL per example and a total, then exit (status 1 if any fail); reads no input")
     parser.add_argument("--listen", metavar="PROTO:PORT", help="Receive syslog over the network instead of reading files/stdin, e.g. udp:514, tcp:5514, or udp:10.0.0.5:514")
     parser.add_argument("--send", metavar="URL", help="Forward CEF records to udp://HOST:PORT, tcp://HOST:PORT (newline-delimited, with reconnect), or kafka://BROKER:PORT/TOPIC (requires the kafka extra)")
     parser.add_argument("--eps", type=float, help="Rate-limit --send to at most this many events per second")
@@ -458,6 +459,20 @@ def main(argv: Optional[list[str]] = None) -> int:
                 load_patterns(pattern_file)
             except PatternFileError as exc:
                 parser.error(str(exc))
+
+    if args.check_patterns:
+        if not args.patterns:
+            parser.error("--check-patterns requires at least one --patterns FILE")
+        given = [opt for opt, on in (("PATHS", args.paths), ("--listen", args.listen), ("--tail", args.tail)) if on]
+        if given:
+            parser.error(f"--check-patterns reads no input; remove {', '.join(given)}")
+        from .api import normalize_event, parse_syslog
+        from .custom import loaded_patterns
+        from .pattern_check import format_report, run_examples
+
+        results = run_examples(loaded_patterns(), lambda line: normalize_event(parse_syslog(line)))
+        print(format_report(results))
+        return 0 if all(result.passed for result in results) else 1
 
     if args.mode:
         from .custom import get_registered

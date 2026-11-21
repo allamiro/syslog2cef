@@ -54,7 +54,7 @@ jobs:
           pip install ruff
           ruff check .
       - name: ShellCheck packaging scripts
-        run: shellcheck packaging/debian/build-deb.sh
+        run: shellcheck packaging/debian/build-deb.sh packaging/rpm/build-rpm.sh
       - name: Run tests from the sdist
         # The RPM %check runs the suite from the PyPI sdist, which has no
         # CHANGELOG, packaging files or keys. Catch tests that need a git
@@ -65,6 +65,25 @@ jobs:
           mkdir "$RUNNER_TEMP/sdist"
           tar -xzf "$RUNNER_TEMP"/dist/*.tar.gz -C "$RUNNER_TEMP/sdist" --strip-components=1
           cd "$RUNNER_TEMP/sdist" && python -m pytest -q
+
+  rpm:
+    # The same Fedora build the release runs (and a Fedora reviewer would):
+    # sdist -> SRPM -> RPM with %check running the suite, then rpmlint in
+    # strict mode with only the reviewed false positives filtered. Catches
+    # spec, packaging and sdist problems on the pull request rather than
+    # at release time.
+    runs-on: ubuntu-24.04
+    container: fedora:44
+    steps:
+      - name: Install build tools
+        run: |
+          dnf install -y rpm-build rpmdevtools rpmlint git glibc-langpack-en \
+            python3-devel python3-build python3-pip \
+            python3-setuptools python3-wheel \
+            pyproject-rpm-macros systemd-rpm-macros
+      - uses: actions/checkout@v5
+      - name: Build and lint the RPM
+        run: bash packaging/rpm/build-rpm.sh
 
   docker:
     runs-on: ubuntu-24.04

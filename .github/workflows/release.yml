@@ -53,42 +53,26 @@ jobs:
   build-rpm:
     name: Build RPM
     runs-on: ubuntu-latest
-    container: fedora:41
+    container: fedora:44
     env:
       GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
     steps:
       - name: Install build tools
         run: |
-          dnf install -y rpm-build rpmdevtools rpm-sign gnupg2 git \
-            dnf5-plugins \
+          dnf install -y rpm-build rpmdevtools rpm-sign rpmlint gnupg2 git \
+            dnf5-plugins glibc-langpack-en \
             python3-devel python3-build python3-pip \
             python3-setuptools python3-wheel \
             pyproject-rpm-macros systemd-rpm-macros
 
       - uses: actions/checkout@v5
 
-      - name: Build sdist
-        run: python3 -m build --sdist
-
-      - name: Build RPM
+      - name: Build and lint RPM
         run: |
+          # The tag is the version; the spec must agree with it.
           VERSION="${GITHUB_REF_NAME#v}"
           sed -i "s/^Version:.*/Version:        ${VERSION}/" packaging/rpm/syslog2cef.spec
-          rpmdev-setuptree
-          cp dist/syslog2cef-*.tar.gz "$HOME/rpmbuild/SOURCES/"
-          cp packaging/rpm/syslogcef.service packaging/rpm/syslogcef@.service packaging/rpm/syslogcef.conf packaging/rpm/syslogcef-instance.conf packaging/rpm/syslogcef.logrotate packaging/rpm/syslogcef.sysusers packaging/rpm/syslogcef.1 "$HOME/rpmbuild/SOURCES/"
-          # Resolve the dynamically generated build requirements
-          # (%pyproject_buildrequires), then do the real build. When every
-          # requirement is already installed, rpmbuild -br succeeds without
-          # emitting a buildreqs package, so only run builddep if one exists.
-          rpmbuild -br packaging/rpm/syslog2cef.spec || true
-          if ls "$HOME"/rpmbuild/SRPMS/syslog2cef-*.buildreqs.nosrc.rpm >/dev/null 2>&1; then
-            dnf builddep -y "$HOME"/rpmbuild/SRPMS/syslog2cef-*.buildreqs.nosrc.rpm
-          fi
-          rpmbuild -ba packaging/rpm/syslog2cef.spec
-          mkdir -p rpms
-          cp "$HOME"/rpmbuild/RPMS/noarch/syslog2cef-*.rpm rpms/
-          cp "$HOME"/rpmbuild/SRPMS/syslog2cef-*.src.rpm rpms/
+          bash packaging/rpm/build-rpm.sh
 
       - name: Sign RPM
         if: env.GPG_PRIVATE_KEY != ''
@@ -303,6 +287,35 @@ jobs:
             --title "$GITHUB_REF_NAME" \
             --generate-notes \
             artifacts/*
+
+      # Fedora package review (#68): post this release's Spec and SRPM URLs
+      # to the Review Request bug, which also makes the Fedora Review
+      # Service re-run its automated review. Opt-in: set the repository
+      # variable FEDORA_REVIEW_BUG to the bug number and the secret
+      # BUGZILLA_API_KEY (bugzilla.redhat.com > Preferences > API Keys).
+      # Delete the variable once the package is approved.
+      - name: Update the Fedora review request
+        if: vars.FEDORA_REVIEW_BUG != ''
+        env:
+          BUGZILLA_API_KEY: ${{ secrets.BUGZILLA_API_KEY }}
+          REVIEW_BUG: ${{ vars.FEDORA_REVIEW_BUG }}
+        run: |
+          if [ -z "$BUGZILLA_API_KEY" ]; then
+            echo "::warning::FEDORA_REVIEW_BUG is set but BUGZILLA_API_KEY is not; skipping"
+            exit 0
+          fi
+          srpm="$(cd artifacts && ls syslog2cef-*.src.rpm)"
+          base="https://github.com/${GITHUB_REPOSITORY}"
+          comment="$(printf '%s\n\nSpec URL: %s\nSRPM URL: %s\n' \
+            "Updated to ${GITHUB_REF_NAME#v} (${base}/releases/tag/${GITHUB_REF_NAME})." \
+            "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_REF_NAME}/packaging/rpm/syslog2cef.spec" \
+            "${base}/releases/download/${GITHUB_REF_NAME}/${srpm}")"
+          jq -n --arg comment "$comment" '{comment: $comment}' \
+            | curl --fail-with-body -sS -X POST \
+                -H "Content-Type: application/json" \
+                -H "X-BUGZILLA-API-KEY: ${BUGZILLA_API_KEY}" \
+                --data @- \
+                "https://bugzilla.redhat.com/rest/bug/${REVIEW_BUG}/comment"
 
   publish-pypi:
     name: Publish to PyPI

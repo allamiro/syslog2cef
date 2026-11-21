@@ -127,6 +127,93 @@ def _parse_envelope(line: str, *, mode: Optional[str], now: Optional[datetime]) 
     return autodetect_and_parse(line, mode=mode, now=now)
 
 
+# What ``StreamConverter(on_parse_error=...)`` accepts.
+_PARSE_ERROR_POLICIES = ("raise", "raw")
+
+# Longest excerpt of a rejected line quoted in a log record.
+_REJECTED_EXCERPT_LEN = 200
+
+
+def _raw_event(line: str) -> ParsedEvent:
+    """Return *line* as a raw-message event with no parsed header fields.
+
+    Used when a forced parser rejects a line that must still be converted:
+    PRI, timestamp and host are left unset, the whole line becomes the
+    message, and ``source_hint`` is "unknown" so ``--stats`` counts it as
+    unmatched. Mapping selection and defaults then apply as for any event.
+    """
+    return ParsedEvent(
+        pri=None,
+        facility=None,
+        severity=None,
+        ts=None,
+        ts_orig="",
+        host=None,
+        app=None,
+        pid=None,
+        msgid=None,
+        sd={},
+        msg=sanitize_message(line),
+        raw=line,
+        source_hint="unknown",
+    )
+
+
+def _log_rejected_line(mode: Optional[str], line: str, *, first: bool) -> None:
+    """Log a line the forced parser *mode* rejected and that was kept raw.
+
+    The first rejection is a warning; later ones are DEBUG, so a stream of
+    malformed input cannot flood the log. The excerpt is cut to
+    ``_REJECTED_EXCERPT_LEN`` characters and quoted with ``repr`` so control
+    characters in hostile input cannot forge log lines.
+    """
+    excerpt = line[:_REJECTED_EXCERPT_LEN]
+    if len(line) > _REJECTED_EXCERPT_LEN:
+        excerpt += "..."
+    if first:
+        logger.warning(
+            "forced parser '%s' rejected a line; converted it as a raw-message "
+            "event (further rejected lines are logged at DEBUG): %r",
+            mode,
+            excerpt,
+        )
+    else:
+        logger.debug(
+            "forced parser '%s' rejected a line; converted it as a raw-message event: %r",
+            mode,
+            excerpt,
+        )
+
+
+def _convert_forced_fallback(
+    line: str,
+    *,
+    mode: Optional[str],
+    mapping: Mapping[str, Any] | Path | str | None,
+    now: Optional[datetime],
+    validate: bool,
+    strict: bool,
+) -> Tuple[str, bool]:
+    """Like :func:`convert_line`, but keep a rejected line as a raw event.
+
+    Returns ``(cef, rejected)``. The ``--multiprocess`` workers use this so a
+    line the forced parser rejects is converted the same way
+    ``StreamConverter(on_parse_error="raw")`` converts it; the caller does
+    the logging, so the first-line warning is not repeated per worker.
+    """
+    from . import custom
+
+    rejected = False
+    try:
+        parsed = _parse_envelope(line, mode=mode, now=now)
+    except ParserError:
+        parsed = _raw_event(line)
+        rejected = True
+    custom.apply_msg_patterns(parsed)
+    normalized = normalize_event(parsed)
+    return to_cef(normalized, mapping, validate=validate, strict=strict), rejected
+
+
 def normalize_event(event: ParsedEvent | NormalizedEvent) -> NormalizedEvent:
     """Normalize parsed syslog data.
 
@@ -269,6 +356,14 @@ class StreamConverter:
     interleaved streams — several files tailed at once — never inherit
     another file's host or timestamp. Callers with a single stream can
     ignore the parameter.
+
+    ``on_parse_error`` decides what happens when a forced ``mode`` rejects
+    a line that is not a continuation: "raise" (the default) propagates the
+    :class:`~syslogcef.parsers.ParserError`; "raw" converts the line as a
+    raw-message event (no PRI, timestamp or host; the whole line is the
+    message) and logs a warning for the first such line, DEBUG for the
+    rest. Auto-detection never rejects a line, so it only matters with
+    ``mode``.
     """
 
     def __init__(
@@ -278,8 +373,15 @@ class StreamConverter:
         mapping: Mapping[str, Any] | Path | str | None = None,
         validate: bool = False,
         strict: bool = False,
+        on_parse_error: str = "raise",
     ) -> None:
+        if on_parse_error not in _PARSE_ERROR_POLICIES:
+            raise ValueError(
+                f"on_parse_error must be 'raise' or 'raw', not {on_parse_error!r}"
+            )
         self.mode = mode
+        self.on_parse_error = on_parse_error
+        self._rejected_lines = 0
         # Validate the mapping once here rather than per converted line, and
         # surface a malformed mapping before any record is emitted.
         self.mapping = None if mapping is None else _load_mapping(mapping)
@@ -299,25 +401,16 @@ class StreamConverter:
         try:
             parsed = _parse_envelope(line, mode=self.mode, now=now)
         except ParserError:
-            if not is_continuation:
+            if is_continuation:
+                # A forced --mode rejects headerless continuation lines; a
+                # continuation with context must inherit, not abort the run.
+                parsed = _raw_event(line)
+            elif self.on_parse_error == "raw":
+                self._rejected_lines += 1
+                _log_rejected_line(self.mode, line, first=self._rejected_lines == 1)
+                parsed = _raw_event(line)
+            else:
                 raise
-            # A forced --mode rejects headerless continuation lines; a
-            # continuation with context must inherit, not abort the run.
-            parsed = ParsedEvent(
-                pri=None,
-                facility=None,
-                severity=None,
-                ts=None,
-                ts_orig="",
-                host=None,
-                app=None,
-                pid=None,
-                msgid=None,
-                sd={},
-                msg=sanitize_message(line),
-                raw=line,
-                source_hint="unknown",
-            )
         if is_continuation:
             parsed.host = ctx.host
             parsed.app = parsed.app or ctx.app

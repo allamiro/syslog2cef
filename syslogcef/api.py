@@ -117,6 +117,16 @@ def parse_syslog(
     return custom.apply_msg_patterns(parsed)
 
 
+def _parse_envelope(line: str, *, mode: Optional[str], now: Optional[datetime]) -> ParsedEvent:
+    """Parse a line without applying msg patterns.
+
+    ``StreamConverter`` completes continuation lines (inherited app, host,
+    stripped message) before choosing a msg pattern, so that the choice
+    sees the final event exactly once.
+    """
+    return autodetect_and_parse(line, mode=mode, now=now)
+
+
 def normalize_event(event: ParsedEvent | NormalizedEvent) -> NormalizedEvent:
     """Normalize parsed syslog data.
 
@@ -287,7 +297,7 @@ class StreamConverter:
         ctx = self._contexts.get(source)
         is_continuation = line[:1] in ("\t", " ") and ctx is not None
         try:
-            parsed = parse_syslog(line, mode=self.mode, now=now)
+            parsed = _parse_envelope(line, mode=self.mode, now=now)
         except ParserError:
             if not is_continuation:
                 raise
@@ -320,17 +330,17 @@ class StreamConverter:
                 parsed.severity = ctx.severity
             parsed.msg = parsed.msg.lstrip()
             parsed.source_hint = "continuation"
-            if parsed.msg_pattern is None:
-                # parse_syslog ran the msg patterns before the line
-                # inherited its app, so msg patterns filtered by app
-                # could not match yet; give them a second chance.
-                from . import custom
-
-                custom.apply_msg_patterns(parsed)
         elif parsed.host is not None and parsed.source_hint != "unknown":
             # Only a line whose host was actually parsed (not the
             # guessed fallback) may become continuation context.
             self._contexts[source] = parsed
+        # Choose the msg pattern only now, once the event is complete: a
+        # continuation line has inherited its app and lost its indentation,
+        # so app-filtered patterns are judged in load order against the
+        # same event a non-continuation line would present.
+        from . import custom
+
+        custom.apply_msg_patterns(parsed)
         normalized = normalize_event(parsed)
         cef = to_cef(normalized, self.mapping, validate=self.validate, strict=self.strict)
         return cef, normalized

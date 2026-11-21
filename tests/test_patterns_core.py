@@ -407,10 +407,31 @@ def test_continuation_keeps_msg_pattern_matched_on_first_pass(tmp_path: Path):
     converter.convert_event(SSHD_HEADER, now=NOW)
     _, event = converter.convert_event(CONTINUATION, now=NOW)
 
-    # The unfiltered pattern matched before the app was inherited and is
-    # not replaced by a second pass.
+    # Load order decides: the unfiltered pattern comes first, so it wins
+    # on the continuation line exactly as on a normal sshd line.
     assert event.msg_pattern == "any_failed"
     assert event.fields == {"duser": "admin"}
+
+
+def test_continuation_selects_msg_pattern_in_load_order_after_inheriting_app(tmp_path: Path):
+    # An app-filtered pattern ahead of an unfiltered fallback: a continuation
+    # line must pick the same pattern (fields and mapping) as a normal line
+    # from that app, not the fallback that matches before the app is known.
+    fallback = {"name": "any_failed", "match": "msg", "regex": r"Failed password for (?P<duser>\S+)"}
+    load_patterns(write_patterns(tmp_path, dict(SSHD_FAILED, mapping="cisco_asa"), fallback))
+    converter = StreamConverter()
+
+    _, normal = converter.convert_event(
+        "<38>Jan  2 03:04:05 web01 sshd[123]: Failed password for admin from 10.0.0.9 port 2200 ssh2", now=NOW
+    )
+    cef, continued = converter.convert_event(CONTINUATION, now=NOW)
+
+    assert normal.msg_pattern == "sshd_failed"
+    assert continued.source_hint == "continuation"
+    assert continued.msg_pattern == "sshd_failed"
+    assert continued.fields == normal.fields == {"suser": "admin", "src": "10.0.0.9", "spt": "2200"}
+    assert "duser" not in continued.fields
+    assert cef.startswith("CEF:0|Cisco|ASA|")
 
 
 def test_msg_pattern_and_pattern_mapping_with_multiprocess(tmp_path: Path):

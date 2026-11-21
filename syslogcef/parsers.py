@@ -760,7 +760,15 @@ def autodetect_and_parse(line: str, *, mode: Optional[str] = None, now: Optional
         parser = PARSERS.get(mode) or custom.get_registered(mode)
         if parser is None:
             raise ParserError(f"Unknown parser mode: {mode}")
-        result = _call_parser(parser, line, now=now)
+        try:
+            result = _call_parser(parser, line, now=now)
+        except ParserError:
+            raise
+        except Exception as exc:
+            # A forced parser that crashes on a line (often a register_parser()
+            # function) rejects that line rather than the whole stream: callers
+            # handle one exception type, and the CLI converts the line raw.
+            raise ParserError(f"Parser '{mode}' failed: {type(exc).__name__}: {exc}") from exc
         if result is None:
             raise ParserError(f"Parser '{mode}' could not parse line")
         return result

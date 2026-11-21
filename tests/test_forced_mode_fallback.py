@@ -248,3 +248,21 @@ def test_library_raw_policy_rejected_line_does_not_become_context():
     # No context yet, so the indented line is itself a rejected line.
     assert event.source_hint == "unknown"
     assert event.host is None
+
+
+def _crashing_parser(line):
+    raise RuntimeError("bug in a registered parser")
+
+
+def test_forced_registered_parser_crash_is_a_rejected_line():
+    # A register_parser() function that raises something other than
+    # ParserError must not stop the stream either.
+    custom.register_parser("crashy", _crashing_parser)
+
+    with pytest.raises(ParserError) as info:
+        StreamConverter(mode="crashy").convert("anything")
+    assert isinstance(info.value.__cause__, RuntimeError)
+
+    cef = StreamConverter(mode="crashy", on_parse_error="raw").convert("anything at all")
+    assert cef.startswith("CEF:0|")
+    assert "anything at all" in cef

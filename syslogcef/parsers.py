@@ -672,16 +672,14 @@ def parse_kv_stream(line: str) -> ParsedEvent | None:
             pairs_ci.get("tz") or pairs_ci.get("timezone") or "",
         )
         if offset_match:
-            sign = 1 if offset_match.group(1) == "+" else -1
-            delta = timedelta(
-                hours=int(offset_match.group(2)), minutes=int(offset_match.group(3))
-            )
-            try:
+            hours, minutes = int(offset_match.group(2)), int(offset_match.group(3))
+            # An out-of-range offset is ignored, keeping the naive timestamp
+            # rather than dropping the event. Check the fields themselves:
+            # timedelta would silently normalize tz=+00:99 to +01:39.
+            if hours <= 23 and minutes <= 59:
+                sign = 1 if offset_match.group(1) == "+" else -1
+                delta = timedelta(hours=hours, minutes=minutes)
                 ts = ts.replace(tzinfo=timezone(sign * delta))
-            except ValueError:
-                # tz=+24:00 and other out-of-range offsets: keep the
-                # naive timestamp rather than dropping the event.
-                pass
 
     host = (
         pairs_ci.get("devname")

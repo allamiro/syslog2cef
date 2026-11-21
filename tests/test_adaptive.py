@@ -153,6 +153,16 @@ def test_kv_numeric_timezone_applied():
     assert ev.ts.utcoffset().total_seconds() == -5 * 3600
 
 
+@pytest.mark.parametrize("tz", ["+00:99", "+12:60", "-1260", "+2500", "+24:00"])
+def test_kv_invalid_numeric_timezone_is_ignored(tz):
+    # timedelta normalizes an out-of-range minute field (+00:99 -> +01:39)
+    # instead of rejecting it, which recorded the wrong instant.
+    line = f'ts=2026-08-11T07:00:00 tz={tz} devname="fw1" logid="0100000001" x=1'
+    ev = parse_syslog(line, mode="kv")
+    assert ev.ts is not None
+    assert ev.ts.tzinfo is None
+
+
 def test_cisco_milliseconds_preserved():
     line = "000123: Feb  8 04:00:47.272: %SEC-6-IPACCESSLOGP: list 100 denied tcp"
     ev = parse_syslog(line)

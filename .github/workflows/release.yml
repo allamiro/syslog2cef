@@ -78,15 +78,7 @@ jobs:
         if: env.GPG_PRIVATE_KEY != ''
         env:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-        run: |
-          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
-          GPG_NAME="$(gpg --list-keys --with-colons | awk -F: '/^uid/ {print $10; exit}')"
-          cat >> "$HOME/.rpmmacros" <<EOF
-          %_signature gpg
-          %_gpg_name ${GPG_NAME}
-          %__gpg_sign_cmd %{__gpg} gpg --batch --pinentry-mode loopback --passphrase "${GPG_PASSPHRASE}" --no-armor --digest-algo sha256 -u "%{_gpg_name}" -sbo %{__signature_filename} %{__plaintext_filename}
-          EOF
-          rpmsign --addsign rpms/*.rpm
+        run: bash packaging/rpm/sign-rpm.sh
 
       - uses: actions/upload-artifact@v6
         with:

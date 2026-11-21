@@ -54,7 +54,7 @@ jobs:
           pip install ruff
           ruff check .
       - name: ShellCheck packaging scripts
-        run: shellcheck packaging/debian/build-deb.sh packaging/rpm/build-rpm.sh
+        run: shellcheck packaging/debian/build-deb.sh packaging/rpm/build-rpm.sh packaging/rpm/sign-rpm.sh
       - name: Run tests from the sdist
         # The RPM %check runs the suite from the PyPI sdist, which has no
         # CHANGELOG, packaging files or keys. Catch tests that need a git
@@ -79,7 +79,7 @@ jobs:
         # dnf5-plugins provides `dnf builddep`, which build-rpm.sh uses for
         # the spec's generated BuildRequires (the release job lists it too).
         run: |
-          dnf install -y rpm-build rpmdevtools rpmlint git glibc-langpack-en \
+          dnf install -y rpm-build rpm-sign gnupg2 rpmdevtools rpmlint git glibc-langpack-en \
             dnf5-plugins \
             python3-devel python3-build python3-pip \
             python3-setuptools python3-wheel \
@@ -87,6 +87,16 @@ jobs:
       - uses: actions/checkout@v5
       - name: Build and lint the RPM
         run: bash packaging/rpm/build-rpm.sh
+      - name: Sign the RPM with a throwaway key
+        # The release signs with the real key in the same script; signing
+        # here too means a change in rpm's signing interface fails the pull
+        # request, not the release.
+        env:
+          GPG_PASSPHRASE: ci-throwaway
+        run: |
+          gpg --batch --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
+            --quick-generate-key "CI throwaway <ci@invalid>" rsa2048 sign never
+          bash packaging/rpm/sign-rpm.sh
 
   docker:
     runs-on: ubuntu-24.04

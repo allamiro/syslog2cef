@@ -52,3 +52,15 @@ def test_pypi_publishes_only_after_every_release_build():
     # APK or image build leaves a version that can never be re-released.
     needs = _needs(_jobs(".github/workflows/release.yml")["publish-pypi"])
     assert RELEASE_BUILD_JOBS | {"build-docker"} <= needs
+
+
+@pytest.mark.parametrize(
+    "workflow, job",
+    [(".github/workflows/ci.yml", "rpm"), (".github/workflows/release.yml", "build-rpm")],
+)
+def test_rpm_jobs_install_the_dnf_builddep_plugin(workflow, job):
+    # build-rpm.sh runs `dnf builddep`, which DNF5 ships in dnf5-plugins.
+    # Install it explicitly rather than relying on the base image.
+    job_text = _jobs(workflow)[job]
+    assert "bash packaging/rpm/build-rpm.sh" in job_text
+    assert re.search(r"dnf install -y[^\n]*(\\\n[^\n]*)*\bdnf5-plugins\b", job_text)

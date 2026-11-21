@@ -76,8 +76,11 @@ jobs:
     container: fedora:44
     steps:
       - name: Install build tools
+        # dnf5-plugins provides `dnf builddep`, which build-rpm.sh uses for
+        # the spec's generated BuildRequires (the release job lists it too).
         run: |
           dnf install -y rpm-build rpmdevtools rpmlint git glibc-langpack-en \
+            dnf5-plugins \
             python3-devel python3-build python3-pip \
             python3-setuptools python3-wheel \
             pyproject-rpm-macros systemd-rpm-macros

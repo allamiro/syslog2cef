@@ -1,5 +1,5 @@
 Name:           syslog2cef
-Version:        0.4.2
+Version:        0.5.0
 Release:        1%{?dist}
 Summary:        Convert syslog events to ArcSight CEF
 
@@ -109,6 +109,13 @@ install -D -m 0644 %{SOURCE7} %{buildroot}%{_sysusersdir}/syslogcef.conf
 %ghost %dir %attr(0755,root,root) %{_localstatedir}/log/syslogcef
 
 %changelog
+* Sat Nov 21 2026 Tamir Suliman <allamiro@gmail.com> - 0.5.0-1
+- Pattern files: captured fields reach mappings, msg patterns with an app
+  filter, %%{NAME} shorthands, per-pattern mappings and examples
+- New --explain, --stats and --check-patterns options
+- Fixes from a review of tailing, network input, parsing, validation and
+  release packaging
+
 * Sat Nov 21 2026 Tamir Suliman <allamiro@gmail.com> - 0.4.2-1
 - Skip tests that need a git checkout when %%check runs from the sdist,
   which stopped the 0.4.1 RPM build

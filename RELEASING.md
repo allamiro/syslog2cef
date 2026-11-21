@@ -98,7 +98,7 @@ Users verify with:
 ```bash
 gpg --import RPM-GPG-KEY-syslogcef
 gpg --verify syslog2cef-X.Y.Z.tar.gz.asc syslog2cef-X.Y.Z.tar.gz
-rpm --import RPM-GPG-KEY-syslogcef && rpm --checksig syslog2cef-X.Y.Z-1.noarch.rpm
+rpm --import RPM-GPG-KEY-syslogcef && rpm --checksig syslog2cef-X.Y.Z-1.fc*.noarch.rpm
 ```
 
 A backup of the private key and passphrase is stored offline by the

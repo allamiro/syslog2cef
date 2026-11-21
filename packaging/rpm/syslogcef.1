@@ -87,9 +87,10 @@ for the events it matches. See
 .B PATTERN FILES
 below for the format. Pattern names are accepted by
 .BR \-\-mode .
-Files are validated at startup; an invalid regex, an unknown key, a
-reserved group name, a bad mapping, or a duplicate name stops the
-program with exit status 2 and a message naming the file and pattern.
+Files are validated at startup; an invalid regex, a reserved group
+name, a bad mapping, or a duplicate name stops the program with exit
+status 2 and a message naming the file and pattern. An unknown key in
+a pattern or example is ignored with a warning on standard error.
 .TP
 .B \-\-check\-patterns
 Run the \fBexamples\fR of every pattern in every
@@ -100,8 +101,13 @@ or
 .BI "FAIL " "pattern " "example " N ": " problems\fR,
 followed by
 .IB passed / total " examples passed" .
-Exit status is 0 when all examples pass (or when no file defines any,
-which prints \fBno examples defined\fR) and 1 otherwise. Requires at
+Each unknown key in a pattern or example (usually a typo such as
+\fBexmaples\fR) is reported first as
+.BI "FAIL " "pattern " "config: unknown key '" key '
+and counts as a failure.
+Exit status is 0 when all examples pass and no unknown keys were found
+(also when no file defines any examples, which prints
+\fBno examples defined\fR) and 1 otherwise. Requires at
 least one
 .BR \-\-patterns ;
 cannot be combined with \fIPATHS\fR,
@@ -231,8 +237,11 @@ Print the version, copyright, license and author, then exit.
 Print a usage summary, then exit.
 .SH PATTERN FILES
 A pattern file is a JSON object with a non\-empty \fBpatterns\fR list.
-Patterns are tried in file order. Each pattern accepts these keys; any
-other key is an error:
+Patterns are tried in file order. Each pattern accepts the keys below.
+Any other key in a pattern or an example is ignored with a warning on
+standard error naming the file, pattern and key, and is reported as a
+failure by
+.BR \-\-check\-patterns .
 .TP
 .B name
 Required. Unique name; must not be a built\-in parser name.
@@ -316,6 +325,9 @@ an optional \fBexpect\fR object of field names and expected values,
 and an optional \fBmatches\fR (default true; false means the pattern
 must not match the line). Run by
 .BR \-\-check\-patterns .
+.TP
+.B description
+Optional free text for people reading the file; not used by syslogcef.
 .PP
 These names are derived by syslogcef and cannot be used as group names
 in either kind of pattern:
@@ -374,7 +386,7 @@ Success.
 .B 1
 Strict validation failed, an input file could not be read, a
 network destination was unreachable after retries, or an example
-failed under
+failed or an unknown key was found under
 .BR \-\-check\-patterns .
 .TP
 .B 2

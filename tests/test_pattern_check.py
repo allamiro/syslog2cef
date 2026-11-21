@@ -14,11 +14,6 @@ from syslogcef import custom
 from syslogcef.cli import main
 from syslogcef.pattern_check import ExampleResult, format_report, run_examples
 
-needs_core = pytest.mark.skipif(
-    not hasattr(syslogcef.custom, "loaded_patterns"), reason="needs patterns core"
-)
-
-
 @pytest.fixture(autouse=True)
 def _clean_registry():
     custom.clear_registry()
@@ -34,6 +29,7 @@ class FakePattern:
     name: str
     examples: List[dict]
     match: str = "line"
+    warnings: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -199,6 +195,39 @@ def test_report_zero_examples():
     assert format_report([]) == "no examples defined"
 
 
+def test_config_warnings_become_failed_results_before_examples():
+    patterns = [
+        FakePattern("a", [{"line": "1"}], warnings=["unknown key 'exmaples'", "unknown key 'x' in example 1"]),
+        FakePattern("b", [{"line": "2"}]),
+    ]
+    results = run_examples(patterns, lambda line: FakeEvent(pattern="a" if line == "1" else "b"))
+
+    assert [(r.pattern, r.kind, r.index, r.passed, r.problems) for r in results] == [
+        ("a", "config", 0, False, ["unknown key 'exmaples'"]),
+        ("a", "config", 0, False, ["unknown key 'x' in example 1"]),
+        ("a", "example", 1, True, []),
+        ("b", "example", 1, True, []),
+    ]
+
+
+def test_report_config_problems():
+    results = [
+        ExampleResult("acme", 0, "", False, ["unknown key 'exmaples'"], kind="config"),
+        ExampleResult("acme", 1, "x", True, []),
+    ]
+    assert format_report(results) == (
+        "FAIL acme config: unknown key 'exmaples'\n"
+        "PASS acme example 1\n"
+        "1/1 examples passed; 1 config problem"
+    )
+    two = [results[0], results[0]]
+    assert format_report(two) == (
+        "FAIL acme config: unknown key 'exmaples'\n"
+        "FAIL acme config: unknown key 'exmaples'\n"
+        "no examples defined; 2 config problems"
+    )
+
+
 # ---- CLI -------------------------------------------------------------------
 
 
@@ -247,8 +276,7 @@ def test_check_patterns_rejects_tail(tmp_path: Path, capsys):
 
 
 def test_check_patterns_wiring_with_stubbed_registry(tmp_path: Path, capsys, monkeypatch):
-    # Exercises the CLI path before the patterns core lands: the loaded
-    # pattern list is stubbed, conversion is real.
+    # The loaded pattern list is stubbed, conversion is real.
     stub = [FakePattern("acme_fw", [{"line": "plain text", "matches": False}])]
     monkeypatch.setattr(syslogcef.custom, "loaded_patterns", lambda: stub, raising=False)
 
@@ -263,7 +291,6 @@ def test_check_patterns_wiring_with_stubbed_registry(tmp_path: Path, capsys, mon
     assert out.endswith("0/1 examples passed\n")
 
 
-@needs_core
 def test_cli_all_examples_pass(tmp_path: Path, capsys):
     entry = dict(ACME, examples=[
         {"line": "ACME fw1 filter: blocked", "expect": {"host": "fw1", "app": "filter"}},
@@ -278,7 +305,6 @@ def test_cli_all_examples_pass(tmp_path: Path, capsys):
     )
 
 
-@needs_core
 def test_cli_failing_example_exits_1(tmp_path: Path, capsys):
     entry = dict(ACME, examples=[
         {"line": "ACME fw1 filter: blocked", "expect": {"host": "fw2"}},
@@ -292,7 +318,6 @@ def test_cli_failing_example_exits_1(tmp_path: Path, capsys):
     assert out.endswith("0/2 examples passed\n")
 
 
-@needs_core
 def test_cli_msg_pattern_example(tmp_path: Path, capsys):
     entry = {
         "name": "sshd_fail",
@@ -308,7 +333,50 @@ def test_cli_msg_pattern_example(tmp_path: Path, capsys):
     assert capsys.readouterr().out == "PASS sshd_fail example 1\n1/1 examples passed\n"
 
 
-@needs_core
 def test_cli_zero_examples_exits_0(tmp_path: Path, capsys):
     assert main(["--check-patterns", "--patterns", str(write_patterns(tmp_path, ACME))]) == 0
     assert capsys.readouterr().out == "no examples defined\n"
+
+
+def test_cli_unknown_keys_fail_the_check(tmp_path: Path, capsys):
+    entry = dict(
+        ACME,
+        description="Acme firewall",
+        exmaples=[{"line": "ACME fw1 filter: blocked"}],
+        examples=[{"line": "ACME fw1 filter: blocked", "expcet": {"host": "fw9"}}],
+    )
+
+    assert main(["--check-patterns", "--patterns", str(write_patterns(tmp_path, entry))]) == 1
+    assert capsys.readouterr().out == (
+        "FAIL acme_fw config: unknown key 'exmaples'\n"
+        "FAIL acme_fw config: unknown key 'expcet' in example 1\n"
+        "PASS acme_fw example 1\n"
+        "1/1 examples passed; 2 config problems\n"
+    )
+
+
+def test_cli_description_alone_passes(tmp_path: Path, capsys):
+    entry = dict(ACME, description="Acme firewall", examples=[{"line": "ACME fw1 filter: blocked"}])
+
+    assert main(["--check-patterns", "--patterns", str(write_patterns(tmp_path, entry))]) == 0
+    assert capsys.readouterr().out == "PASS acme_fw example 1\n1/1 examples passed\n"
+
+
+def test_cli_conversion_with_unknown_key_warns_on_stderr(tmp_path: Path):
+    import subprocess
+    import sys
+
+    patterns = write_patterns(tmp_path, dict(ACME, exmaples=[]))
+    proc = subprocess.run(
+        [sys.executable, "-m", "syslogcef", "--patterns", str(patterns)],
+        input="ACME fw1 filter: blocked\n",
+        capture_output=True,
+        text=True,
+        cwd=str(Path(__file__).resolve().parents[1]),
+        timeout=30,
+    )
+
+    assert proc.returncode == 0
+    assert proc.stdout.startswith("CEF:0|")
+    assert "shost=fw1" in proc.stdout
+    assert f"{patterns}: pattern 'acme_fw': unknown key 'exmaples' (ignored)" in proc.stderr

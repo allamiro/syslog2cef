@@ -63,6 +63,14 @@ Two ways to teach syslogcef a format it does not know (issue #67):
    ``examples``
        A list of ``{"line": str, "expect": {field: value}, "matches":
        bool}`` objects, checked by ``--check-patterns``.
+   ``description``
+       Free text for humans; ignored by the converter.
+
+   Any other key in an entry or an example (typically a typo such as
+   ``"exmaples"``) does not fail loading: it is ignored, logged as a
+   warning on the ``syslogcef.custom`` logger naming the file, pattern
+   and key, recorded in ``CustomPattern.warnings``, and reported as a
+   failure by ``--check-patterns``.
 
    Named groups: in a line pattern, ``pri``, ``host``, ``app``, ``pid``,
    ``msgid``, ``msg`` and ``ts`` fill the event envelope; every other
@@ -81,8 +89,7 @@ Two ways to teach syslogcef a format it does not know (issue #67):
    a valid ``--mode`` value.
 
 Files are validated eagerly at load time — regex syntax, group names,
-timestamp formats, duplicate names, unknown keys, mappings, example
-structure — so a typo fails at startup with a clear message instead of
+timestamp formats, duplicate names, mappings, example structure — so a typo fails at startup with a clear message instead of
 mid-stream. User regexes run against untrusted log content: keep them
 anchored and free of nested quantifiers (ReDoS), as they enjoy the same
 time budget as everything else, i.e. none.
@@ -91,6 +98,7 @@ time budget as everything else, i.e. none.
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -116,10 +124,15 @@ _TS_SPECIAL_FORMATS = {"iso8601", "epoch"}
 _PRIORITIES = {"before", "after"}
 _MATCH_KINDS = ("line", "msg")
 _ENTRY_KEYS = frozenset(
-    {"name", "regex", "match", "timestamp_format", "priority", "app", "mapping", "examples"}
+    {
+        "name", "regex", "match", "timestamp_format", "priority", "app", "mapping",
+        "examples", "description",
+    }
 )
 _LINE_ONLY_KEYS = ("timestamp_format", "priority")
 _EXAMPLE_KEYS = frozenset({"line", "expect", "matches"})
+
+logger = logging.getLogger(__name__)
 _BUNDLED_MAPPINGS = ("cisco_asa", "cisco_ios", "f5", "fortinet", "linux", "sophos", "vmware")
 
 
@@ -141,6 +154,11 @@ class CustomPattern:
     examples: List[dict] = field(default_factory=list)
     # Path of the pattern file this pattern came from.
     source: str = ""
+    # The optional free-text 'description'.
+    description: Optional[str] = None
+    # Load-time problems that did not fail loading, e.g. "unknown key
+    # 'exmaples'"; --check-patterns reports each one as a failure.
+    warnings: List[str] = field(default_factory=list)
 
     def parse(self, line: str, *, now: Optional[datetime] = None) -> Optional[ParsedEvent]:
         if self.match != "line":
@@ -386,7 +404,8 @@ def _resolve_mapping(ref: Any, base_dir: Path, where: str) -> Mapping[str, Any]:
         raise PatternFileError(f"{where}: invalid 'mapping' {ref!r}: {exc}") from exc
 
 
-def _validate_examples(raw: Any, where: str) -> List[dict]:
+def _validate_examples(raw: Any, where: str, warnings: List[str]) -> List[dict]:
+    """Validate the 'examples' list; unknown example keys go to *warnings*."""
     if not isinstance(raw, list):
         raise PatternFileError(f"{where}: 'examples' must be a list of objects")
     examples: List[dict] = []
@@ -394,11 +413,9 @@ def _validate_examples(raw: Any, where: str) -> List[dict]:
         at = f"{where}: examples[{index}]"
         if not isinstance(example, dict):
             raise PatternFileError(f"{at}: must be an object")
-        unknown = sorted(set(example) - _EXAMPLE_KEYS)
-        if unknown:
-            raise PatternFileError(
-                f"{at}: unknown key(s) {unknown}; allowed: {sorted(_EXAMPLE_KEYS)}"
-            )
+        for key in sorted(set(example) - _EXAMPLE_KEYS, key=str):
+            # Numbered from 1, as --check-patterns numbers examples.
+            warnings.append(f"unknown key {key!r} in example {index + 1}")
         line = example.get("line")
         if not isinstance(line, str) or not line:
             raise PatternFileError(f"{at}: 'line' is required and must be a non-empty string")
@@ -466,11 +483,12 @@ def load_patterns(path: Union[str, Path]) -> int:
         if not name or not isinstance(name, str):
             raise PatternFileError(f"{where}: missing 'name'")
         where = f"{path}: pattern '{name}'"
-        unknown_keys = sorted(set(entry) - _ENTRY_KEYS)
-        if unknown_keys:
-            raise PatternFileError(
-                f"{where}: unknown key(s) {unknown_keys}; allowed: {sorted(_ENTRY_KEYS)}"
-            )
+        # Unknown keys (usually typos) are reported, not fatal: a newer
+        # pattern file still loads on an older syslogcef.
+        warnings = [f"unknown key {key!r}" for key in sorted(set(entry) - _ENTRY_KEYS, key=str)]
+        description = entry.get("description")
+        if description is not None and not isinstance(description, str):
+            raise PatternFileError(f"{where}: 'description' must be a string")
         if name in PARSERS:
             raise PatternFileError(f"{where}: shadows a built-in parser name")
         if (
@@ -561,7 +579,7 @@ def load_patterns(path: Union[str, Path]) -> int:
 
         examples: List[dict] = []
         if "examples" in entry:
-            examples = _validate_examples(entry["examples"], where)
+            examples = _validate_examples(entry["examples"], where, warnings)
 
         loaded.append(
             CustomPattern(
@@ -574,6 +592,8 @@ def load_patterns(path: Union[str, Path]) -> int:
                 mapping_ref=mapping_ref,
                 examples=examples,
                 source=str(path),
+                description=description,
+                warnings=warnings,
             )
         )
 
@@ -584,5 +604,7 @@ def load_patterns(path: Union[str, Path]) -> int:
             (_before if pattern.priority == "before" else _after).append(pattern)
             _registered[pattern.name] = pattern.parse
         _loaded.append(pattern)
+        for warning in pattern.warnings:
+            logger.warning("%s: pattern '%s': %s (ignored)", pattern.source, pattern.name, warning)
     _pattern_mappings.update(mappings)
     return len(loaded)

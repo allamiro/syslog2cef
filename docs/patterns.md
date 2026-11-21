@@ -227,7 +227,9 @@ PASS sshd_auth example 3
 ```
 
 `--check-patterns` loads the files, runs every example of every pattern, and
-exits with status 0 if all pass, 1 if any fail. It reads no log input, so it
+exits with status 0 if all pass, 1 if any fail. An unknown key in a pattern
+or example (usually a typo) also counts as a failure; see
+[Unknown keys](#unknown-keys). It reads no log input, so it
 cannot be combined with input paths, `--listen` or `--tail`. With no examples
 in any loaded file it prints `no examples defined` and exits 0.
 
@@ -480,9 +482,13 @@ given on the command line. Put specific patterns before general ones.
 | `app` | string or list of strings | msg only | no | Only apply the pattern when the event's program name (the `app` field) equals one of these values, ignoring case. Without it, the pattern is tried on every event. |
 | `mapping` | string | both | no | CEF mapping for events this pattern matches. Either a bundled mapping name (`cisco_asa`, `cisco_ios`, `f5`, `fortinet`, `linux`, `sophos`, `vmware`) or a path to a mapping JSON file. A relative path is resolved against the pattern file's directory. Loaded and checked when the pattern file loads. |
 | `examples` | list of objects | both | no | Sample lines checked by `--check-patterns`. See [Examples](#examples). |
+| `description` | string | both | no | Free text for people reading the file, such as where the lines come from. syslogcef does not use it. |
 
-Any other key is an error, so a typo such as `"exmaples"` is reported at
-load time instead of being silently ignored.
+Any other key does not stop the file from loading: syslogcef ignores it and
+logs a warning that names the file, the pattern and the key. The key is
+usually a typo such as `"exmaples"`, which would otherwise silently drop
+your examples, so `--check-patterns` reports every such key as a failure
+(see [Unknown keys](#unknown-keys)).
 
 ### Named groups and fields
 
@@ -667,7 +673,8 @@ Each entry in `examples` is an object:
 | `expect` | object | no | Field name to expected value (string or number). |
 | `matches` | boolean | no, default `true` | Whether this pattern should match the line. |
 
-Any other key is an error. `--check-patterns` runs each `line` through the
+Any other key in an example (for instance `"expcet"`) is ignored with a
+warning, like an unknown pattern key. `--check-patterns` runs each `line` through the
 same pipeline as normal conversion, with automatic parser detection (as if no
 `--mode` were given), and then:
 
@@ -720,13 +727,39 @@ and the offending key or group:
 
 | Check | Cause and fix |
 |---|---|
-| Unknown key | A pattern or example has a key not listed in this reference, usually a typo such as `"exmaples"`. |
 | Reserved name | A group is named `severity`, `raw`, `rt` or another [reserved name](#reserved-names). Rename it. |
 | Envelope group in a msg pattern | A msg pattern has a group named `pri`, `host`, `app`, `pid`, `msgid`, `msg` or `ts`. Rename it, or use a line pattern. |
 | `timestamp_format` or `priority` on a msg pattern | These only apply to line patterns. Remove them. |
 | `app` key on a line pattern | The `app` filter only applies to msg patterns. To read the program name in a line pattern, capture it with an `(?P<app>...)` group. |
 | Mapping | The `mapping` value is not a bundled mapping name, the file cannot be read, or the mapping fails the same checks as a `--mapping` file (templates, extension keys, severity map). |
 | Example structure | An example is not an object, has no `line`, or has an `expect` that is not an object or a `matches` that is not true or false. |
+| `'description' must be a string` | The `description` value is a number, list or object. |
+
+### Unknown keys
+
+A key that this reference does not list, in a pattern or in an example, does
+not stop the load. syslogcef ignores the key, keeps running, and logs a
+warning to stderr that names the file, the pattern and the key. Pattern files
+written for a newer syslogcef therefore still load on an older one.
+
+Most unknown keys are typos, and a typo can quietly disable a feature: a
+pattern with `"exmaples"` instead of `"examples"` has no examples at all. So
+`--check-patterns` turns each unknown key into a failure, and exits 1:
+
+```bash
+syslogcef --patterns sshd.json --check-patterns
+```
+
+```text
+WARNING:syslogcef.custom:sshd.json: pattern 'sshd_auth': unknown key 'exmaples' (ignored)
+FAIL sshd_auth config: unknown key 'exmaples'
+no examples defined; 1 config problem
+```
+
+The first line is the warning on stderr; the rest is the report on stdout.
+An unknown key inside an example is reported as, for instance,
+`FAIL sshd_auth config: unknown key 'expcet' in example 2`. To leave a note
+in the file, use the `description` key, which is never reported.
 
 ## Keeping regexes fast (ReDoS)
 

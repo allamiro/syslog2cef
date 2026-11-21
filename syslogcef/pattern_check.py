@@ -14,13 +14,19 @@ from typing import Any, Callable, Iterable, List
 
 @dataclass
 class ExampleResult:
-    """Outcome of one example. ``index`` is 1-based, as in the report."""
+    """Outcome of one example. ``index`` is 1-based, as in the report.
+
+    A result with ``kind == "config"`` is not an example but a pattern
+    file problem that did not fail loading (e.g. an unknown key); it is
+    always a failure and has ``index`` 0 and an empty ``line``.
+    """
 
     pattern: str
     index: int
     line: str
     passed: bool
     problems: List[str] = field(default_factory=list)
+    kind: str = "example"
 
 
 def _matched_name(event: Any, kind: str) -> Any:
@@ -68,9 +74,24 @@ def run_examples(patterns: Iterable[Any], convert: Callable[[str], Any]) -> List
     ``line``, optional ``expect`` and optional ``matches``).
     ``convert(line)`` returns a normalized event. An exception from
     ``convert`` fails that example instead of aborting the run.
+
+    Each entry of a pattern's optional ``warnings`` list (load-time
+    problems such as unknown keys) becomes a failed ``"config"`` result
+    ahead of that pattern's examples.
     """
     results: List[ExampleResult] = []
     for pattern in patterns:
+        for warning in getattr(pattern, "warnings", None) or []:
+            results.append(
+                ExampleResult(
+                    pattern=pattern.name,
+                    index=0,
+                    line="",
+                    passed=False,
+                    problems=[warning],
+                    kind="config",
+                )
+            )
         kind = getattr(pattern, "match", "line") or "line"
         for index, example in enumerate(getattr(pattern, "examples", None) or [], start=1):
             line = example.get("line", "")
@@ -94,16 +115,23 @@ def run_examples(patterns: Iterable[Any], convert: Callable[[str], Any]) -> List
 def format_report(results: Iterable[ExampleResult]) -> str:
     """Render results as PASS/FAIL lines plus a totals line (no trailing newline)."""
     results = list(results)
-    if not results:
-        return "no examples defined"
     lines = []
     for result in results:
-        if result.passed:
+        problems = "; ".join(result.problems)
+        if result.kind == "config":
+            lines.append(f"FAIL {result.pattern} config: {problems}")
+        elif result.passed:
             lines.append(f"PASS {result.pattern} example {result.index}")
         else:
-            lines.append(
-                f"FAIL {result.pattern} example {result.index}: {'; '.join(result.problems)}"
-            )
-    passed = sum(1 for r in results if r.passed)
-    lines.append(f"{passed}/{len(results)} examples passed")
+            lines.append(f"FAIL {result.pattern} example {result.index}: {problems}")
+    examples = [r for r in results if r.kind != "config"]
+    if examples:
+        passed = sum(1 for r in examples if r.passed)
+        total = f"{passed}/{len(examples)} examples passed"
+    else:
+        total = "no examples defined"
+    config = len(results) - len(examples)
+    if config:
+        total += f"; {config} config problem{'s' if config != 1 else ''}"
+    lines.append(total)
     return "\n".join(lines)

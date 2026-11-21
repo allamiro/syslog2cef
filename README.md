@@ -141,7 +141,7 @@ Options:
 | `--mode MODE` | Parser override: `rfc3164`, `rfc5424`, `rsyslog_json`, `rsyslog_file`, `journald_json`, `journald_short`, `journald_iso`, `cisco_seq`, `iso_syslog`, `kv`, or a name from `--patterns`. Auto-detected when omitted. |
 | `--mapping FILE` | Mapping JSON file. Auto-selected from message content when omitted. |
 | `--patterns FILE` | Custom parser patterns (see "Custom Parsers"); may be repeated. |
-| `--check-patterns` | Run the `examples` in every `--patterns` file, print `PASS`/`FAIL` per example, and exit 1 if any fail. Takes no input. |
+| `--check-patterns` | Run the `examples` in every `--patterns` file, print `PASS`/`FAIL` per example (and a `FAIL` line per unknown key), and exit 1 if any fail. Takes no input. |
 | `--tail` | Follow input files like `tail -f`. |
 | `--listen PROTO:PORT` | Receive syslog over the network instead of files/stdin: `udp:514`, `tcp:5514`, or `udp:10.0.0.5:514`. |
 | `--send URL` | Forward CEF to `udp://HOST:PORT`, `tcp://HOST:PORT`, or `kafka://BROKER:PORT/TOPIC` (needs the `kafka` extra). |
@@ -306,8 +306,11 @@ syslogcef --patterns sshd.json /var/log/secure         # convert
   become fields that mapping templates can use (`%(src)s`).
 - `mapping` (a bundled mapping name or a JSON file next to the pattern
   file) applies to the events the pattern matches; `--mapping` still wins.
-- Files are validated at startup, so a typo fails with a clear message
-  instead of mid-stream. Pattern names also work as `--mode` values.
+- Files are validated at startup, so a bad regex or mapping fails with a
+  clear message instead of mid-stream. An unknown key (often a typo such
+  as `"exmaples"`) is ignored with a warning, and `--check-patterns`
+  reports it as a failure. Use `description` for notes. Pattern names also
+  work as `--mode` values.
 - In the service, set `EXTRA_ARGS=--patterns /etc/syslogcef/patterns/sshd.json`.
 - Your regexes run against untrusted log content: anchor them and avoid
   nested quantifiers (ReDoS).

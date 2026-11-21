@@ -619,9 +619,9 @@ def test_shorthand_reserved_capture_name_is_rejected(tmp_path: Path):
         ({"name": "x", "match": "msg", "regex": r"x", "app": []}, "'app' must be"),
         ({"name": "x", "match": "msg", "regex": r"x", "app": ["sshd", 3]}, "'app' must be"),
         ({"name": "x", "match": "msg", "regex": r"x", "app": {"a": 1}}, "'app' must be"),
-        # Unknown keys (typos).
-        ({"name": "x", "regex": r"(?P<msg>.*)", "exmaples": []}, r"unknown key\(s\) \['exmaples'\]"),
-        ({"name": "x", "match": "msg", "regex": r"x", "apps": "sshd"}, r"unknown key\(s\) \['apps'\]"),
+        # A known key with the wrong type is still an error.
+        ({"name": "x", "regex": r"(?P<msg>.*)", "description": 5}, "'description' must be a string"),
+        ({"name": "x", "regex": r"(?P<msg>.*)", "description": ["a"]}, "'description' must be a string"),
         # Examples shape.
         ({"name": "x", "regex": r"(?P<msg>.*)", "examples": {"line": "a"}}, "'examples' must be a list"),
         ({"name": "x", "regex": r"(?P<msg>.*)", "examples": None}, "'examples' must be a list"),
@@ -629,10 +629,6 @@ def test_shorthand_reserved_capture_name_is_rejected(tmp_path: Path):
         ({"name": "x", "regex": r"(?P<msg>.*)", "examples": [{"expect": {}}]}, r"examples\[0\]: 'line' is required"),
         ({"name": "x", "regex": r"(?P<msg>.*)", "examples": [{"line": ""}]}, r"examples\[0\]: 'line' is required"),
         ({"name": "x", "regex": r"(?P<msg>.*)", "examples": [{"line": 5}]}, r"examples\[0\]: 'line' is required"),
-        (
-            {"name": "x", "regex": r"(?P<msg>.*)", "examples": [{"line": "a"}, {"line": "b", "expcet": {}}]},
-            r"examples\[1\]: unknown key\(s\) \['expcet'\]",
-        ),
         ({"name": "x", "regex": r"(?P<msg>.*)", "examples": [{"line": "a", "expect": ["src"]}]}, "'expect' must be an object"),
         (
             {"name": "x", "regex": r"(?P<msg>.*)", "examples": [{"line": "a", "expect": {"src": ["1"]}}]},
@@ -662,6 +658,68 @@ def test_load_errors(tmp_path: Path, entry, message_part):
     message = str(excinfo.value)
     assert str(path) in message
     assert "pattern 'x'" in message
+
+
+# --- unknown keys and description ------------------------------------------
+
+
+def test_description_is_accepted_and_stored(tmp_path: Path, caplog):
+    with caplog.at_level("WARNING", logger="syslogcef.custom"):
+        load_patterns(write_patterns(tmp_path, dict(SSHD_FAILED, description="Failed SSH logins")))
+
+    [pattern] = custom.loaded_patterns()
+    assert pattern.description == "Failed SSH logins"
+    assert pattern.warnings == []
+    assert caplog.records == []
+    assert parse_syslog(SSHD_LINE).msg_pattern == "sshd_failed"
+
+
+def test_unknown_entry_keys_warn_but_load(tmp_path: Path, caplog):
+    entry = dict(SSHD_FAILED, exmaples=[{"line": "x"}], apps="cron")
+    path = write_patterns(tmp_path, entry)
+    with caplog.at_level("WARNING", logger="syslogcef.custom"):
+        assert load_patterns(path) == 1
+
+    [pattern] = custom.loaded_patterns()
+    assert pattern.warnings == ["unknown key 'apps'", "unknown key 'exmaples'"]
+    assert pattern.examples == []
+    # The pattern works; the unknown keys are ignored.
+    assert parse_syslog(SSHD_LINE).msg_pattern == "sshd_failed"
+    messages = [r.getMessage() for r in caplog.records if r.name == "syslogcef.custom"]
+    assert messages == [
+        f"{path}: pattern 'sshd_failed': unknown key 'apps' (ignored)",
+        f"{path}: pattern 'sshd_failed': unknown key 'exmaples' (ignored)",
+    ]
+    assert all(r.levelname == "WARNING" for r in caplog.records)
+
+
+def test_unknown_example_keys_warn_but_load(tmp_path: Path, caplog):
+    entry = dict(
+        SSHD_FAILED,
+        examples=[{"line": SSHD_LINE}, {"line": SSHD_LINE, "expcet": {"src": "x"}, "note": "n"}],
+    )
+    path = write_patterns(tmp_path, entry)
+    with caplog.at_level("WARNING", logger="syslogcef.custom"):
+        load_patterns(path)
+
+    [pattern] = custom.loaded_patterns()
+    assert pattern.warnings == ["unknown key 'expcet' in example 2", "unknown key 'note' in example 2"]
+    # Unknown keys are dropped from the stored example.
+    assert pattern.examples == [{"line": SSHD_LINE}, {"line": SSHD_LINE}]
+    messages = [r.getMessage() for r in caplog.records if r.name == "syslogcef.custom"]
+    assert messages == [
+        f"{path}: pattern 'sshd_failed': unknown key 'expcet' in example 2 (ignored)",
+        f"{path}: pattern 'sshd_failed': unknown key 'note' in example 2 (ignored)",
+    ]
+
+
+def test_no_warnings_logged_when_the_file_fails_to_load(tmp_path: Path, caplog):
+    path = write_patterns(tmp_path, dict(SSHD_FAILED, exmaples=[]), {"name": "bad", "regex": "("})
+    with caplog.at_level("WARNING", logger="syslogcef.custom"):
+        with pytest.raises(PatternFileError, match="invalid regex"):
+            load_patterns(path)
+    assert caplog.records == []
+    assert custom.loaded_patterns() == []
 
 
 def test_invalid_mapping_content_is_a_load_error(tmp_path: Path):

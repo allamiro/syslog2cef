@@ -335,6 +335,9 @@ def _mp_load_patterns(pattern_files: list) -> None:
     # it would fail every worker with duplicate-name errors.
     from .custom import clear_registry, load_patterns
 
+    # The parent already logged any pattern file warnings at startup;
+    # don't repeat them once per worker.
+    logging.getLogger("syslogcef.custom").setLevel(logging.ERROR)
     clear_registry()
     for path in pattern_files:
         load_patterns(path)

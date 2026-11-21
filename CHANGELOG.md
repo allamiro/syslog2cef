@@ -39,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   by msg pattern, and the number of lines no parser recognized with the
   first few of them. It works alongside normal output, `--output`, `--send`
   and `--explain`.
+- An optional `description` key on patterns, for notes; syslogcef ignores it.
 - `docs/patterns.md`, a pattern authoring guide with an OpenSSH walkthrough,
   and example files under `examples/patterns/`. The README and man page
   document the new keys and flags.
@@ -46,7 +47,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - An unknown key in a pattern or example (for instance a misspelled
-  `"exmaples"`) is now a load error instead of being ignored.
+  `"exmaples"`) is still ignored, so the file keeps loading, but it is now
+  logged as a warning naming the file, pattern and key, and
+  `--check-patterns` reports it as a failure (`FAIL <pattern> config:
+  unknown key 'exmaples'`) and exits 1.
 
 ## [0.4.2] - 2026-11-21
 

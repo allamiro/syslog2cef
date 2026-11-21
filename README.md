@@ -140,6 +140,7 @@ Options:
 | `--validate` | Check CEF extensions against the ArcSight dictionary; violations are logged as warnings. |
 | `--strict` | Like `--validate`, but exit with an error on type or length violations. |
 | `--log-level LEVEL` | Python logging level (default `WARNING`). |
+| `--version` | Print the version, copyright, license and author, then exit. |
 
 `python -m syslogcef` is equivalent to the `syslogcef` entry point.
 
@@ -416,7 +417,7 @@ repository" button produces APA and BibTeX from it.
 @software{suliman_syslog2cef,
   author  = {Suliman, Tamir},
   title   = {syslog2cef: Convert syslog to ArcSight Common Event Format (CEF)},
-  version = {0.3.3},
+  version = {0.4.0},
   year    = {2026},
   url     = {https://github.com/allamiro/syslog2cef},
   license = {MIT}

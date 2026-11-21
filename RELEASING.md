@@ -24,7 +24,8 @@ which:
 
 ```bash
 # 1. Update the version in pyproject.toml and packaging/rpm/syslogcef.spec,
-#    and version/date-released in CITATION.cff (plus the README BibTeX)
+#    and version/date-released in CITATION.cff (plus the README BibTeX),
+#    and __version__ in syslogcef/_version.py (a test checks it matches)
 # 2. Move the Unreleased section of CHANGELOG.md under the new version
 # 3. Commit via a PR, then tag the merge commit on main:
 git checkout main && git pull

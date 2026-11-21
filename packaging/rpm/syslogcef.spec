@@ -1,5 +1,5 @@
 Name:           syslogcef
-Version:        0.3.3
+Version:        0.4.0
 Release:        1%{?dist}
 Summary:        Convert syslog events to ArcSight CEF
 
@@ -94,6 +94,13 @@ install -D -m 0644 %{SOURCE7} %{buildroot}%{_sysusersdir}/syslogcef.conf
 %{_sysusersdir}/syslogcef.conf
 
 %changelog
+* Sat Nov 21 2026 Tamir Suliman <allamiro@gmail.com> - 0.4.0-1
+- Carry the raw line in the Cisco ASA cs1 and drop custom-field labels
+  whose value is empty
+- Date yearless timestamps to their most recent past occurrence instead
+  of the nearest one, which could be next year
+- Build the COPR SRPM from the git checkout instead of PyPI
+
 * Wed Aug 12 2026 Tamir Suliman <allamiro@gmail.com> - 0.3.3-1
 - Stop a cached hostless adaptive layout from suppressing hosts on later
   lines; keep IPv6 hosts intact and retain ts_orig

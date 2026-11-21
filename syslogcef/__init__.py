@@ -9,10 +9,16 @@ conversion workflow.
 """
 from __future__ import annotations
 
+from ._version import __author__, __copyright__, __email__, __license__, __version__
 from .api import StreamConverter, convert_line, normalize_event, parse_syslog, to_cef
 from .custom import PatternFileError, load_patterns, register_parser
 
 __all__ = [
+    "__version__",
+    "__author__",
+    "__email__",
+    "__copyright__",
+    "__license__",
     "StreamConverter",
     "convert_line",
     "normalize_event",

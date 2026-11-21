@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Msg patterns: a pattern with `"match": "msg"` is applied to the message of
+  every parsed event, whatever parser read the header, and turns its named
+  groups into fields. An optional `app` key limits it to events from given
+  programs (`"app": ["sshd", "sshd-session"]`). This covers the common case
+  of a device whose syslog header is already understood but whose message
+  text carries the values a SIEM needs, without matching the whole line.
+- Line patterns keep every named group beyond `pri`, `host`, `app`, `pid`,
+  `msgid`, `msg` and `ts` as a field instead of rejecting it. Captured fields
+  from either kind of pattern are available to mapping templates
+  (`%(src)s`), replace a same-named key=value pair from the message, and get
+  the usual alias handling (`src_ip` also provides `src`).
+- Regex shorthands in pattern files: `%{IP:src}`, `%{PORT:spt}`,
+  `%{USER:suser}`, `%{TIMESTAMP_ISO8601:ts}` and 14 more insert a tested
+  regex, captured under the given name, so common values need no
+  hand-written regex. `%{NAME}` without a field name matches without
+  capturing. An unknown name fails at load time and lists the known ones.
+- A pattern's `mapping` key names a bundled mapping or a mapping file
+  (relative to the pattern file) for the events it matches. It is validated
+  at load time; `--mapping` still takes precedence.
+- Pattern `examples` (`line`, `expect`, `matches`) and `--check-patterns`,
+  which runs them through the normal pipeline, prints `PASS`/`FAIL` per
+  example and exits 1 on any failure, so pattern files can be tested before
+  a service restart or in CI.
+- `--explain` prints, for each input line, the parser, the line and msg
+  patterns that matched, where the mapping came from, every field available
+  to mapping templates, and the resulting CEF record.
+- `--stats` prints a summary to stderr when input ends: lines by parser and
+  by msg pattern, and the number of lines no parser recognized with the
+  first few of them. It works alongside normal output, `--output`, `--send`
+  and `--explain`.
+- An optional `description` key on patterns, for notes; syslogcef ignores it.
+- `docs/patterns.md`, a pattern authoring guide with an OpenSSH walkthrough,
+  and example files under `examples/patterns/`. The README and man page
+  document the new keys and flags.
+
+### Changed
+
+- An unknown key in a pattern or example (for instance a misspelled
+  `"exmaples"`) is still ignored, so the file keeps loading, but it is now
+  logged as a warning naming the file, pattern and key, and
+  `--check-patterns` reports it as a failure (`FAIL <pattern> config:
+  unknown key 'exmaples'`) and exits 1.
+
+### Fixed
+
+- Ctrl-C (SIGINT) now stops a run, typically `--tail` or `--listen`, with
+  exit status 130 instead of a `KeyboardInterrupt` traceback.
+
 ## [0.4.2] - 2026-11-21
 
 Completes the 0.4.1 release. 0.4.1 reached PyPI and the container

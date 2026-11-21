@@ -1,0 +1,87 @@
+# Packit (https://packit.dev): Fedora's upstream-to-Fedora automation.
+#
+# One-time setup by the repository owner:
+#   1. Install the Packit GitHub App on this repository
+#      (https://github.com/marketplace/packit-as-a-service) and link the
+#      GitHub account to the Fedora account (FAS) when Packit asks.
+#   2. After the package review (#68) is approved and the dist-git repo
+#      exists, add packit as a collaborator there ("fedpkg request-repo"
+#      output explains how) so the downstream jobs can open pull requests.
+#
+# Until then only the pull-request COPR builds run; the downstream jobs
+# have no dist-git repository to act on and do nothing.
+
+specfile_path: packaging/rpm/syslog2cef.spec
+upstream_package_name: syslog2cef
+downstream_package_name: syslog2cef
+upstream_tag_template: v{version}
+
+srpm_build_deps:
+  - python3-build
+  - python3-setuptools
+  - python3-wheel
+
+actions:
+  # Source0 is the PyPI sdist; build the identical tarball from the
+  # checkout so pull-request builds test the proposed code.
+  create-archive:
+    - python3 -m build --sdist --outdir packaging/rpm/
+    - bash -c "ls -1 packaging/rpm/syslog2cef-*.tar.gz"
+
+# Files kept in Fedora dist-git alongside the spec (the non-tarball
+# sources, the reviewed rpmlint filters, and this file).
+files_to_sync:
+  - src: packaging/rpm/syslog2cef.spec
+    dest: syslog2cef.spec
+  - src: packaging/rpm/syslog2cef.rpmlintrc
+    dest: syslog2cef.rpmlintrc
+  - src: packaging/rpm/syslogcef.service
+    dest: syslogcef.service
+  - src: packaging/rpm/syslogcef@.service
+    dest: syslogcef@.service
+  - src: packaging/rpm/syslogcef.conf
+    dest: syslogcef.conf
+  - src: packaging/rpm/syslogcef-instance.conf
+    dest: syslogcef-instance.conf
+  - src: packaging/rpm/syslogcef.logrotate
+    dest: syslogcef.logrotate
+  - src: packaging/rpm/syslogcef.sysusers
+    dest: syslogcef.sysusers
+  - src: packaging/rpm/syslogcef.1
+    dest: syslogcef.1
+  - .packit.yaml
+
+jobs:
+  # Every pull request: build the RPM in a throwaway COPR project for all
+  # supported Fedora releases and EPEL, reported as a check on the PR.
+  - job: copr_build
+    trigger: pull_request
+    targets:
+      - fedora-all
+      - epel-9
+      - epel-10
+
+  # After the package is in Fedora: each GitHub release opens a dist-git
+  # pull request with the new version and synced files...
+  - job: propose_downstream
+    trigger: release
+    dist_git_branches:
+      - fedora-all
+      - epel-9
+      - epel-10
+
+  # ...merging that pull request builds it in Koji...
+  - job: koji_build
+    trigger: commit
+    dist_git_branches:
+      - fedora-all
+      - epel-9
+      - epel-10
+
+  # ...and files the Bodhi update that ships it (rawhide needs none).
+  - job: bodhi_update
+    trigger: commit
+    dist_git_branches:
+      - fedora-branched
+      - epel-9
+      - epel-10

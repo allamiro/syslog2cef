@@ -218,6 +218,9 @@ jobs:
 
   build-docker:
     name: Build and push container image
+    # Pushing overwrites `latest`, so only push once the tests and every
+    # other release build have passed.
+    needs: [build-python, build-rpm, build-standalone, build-apk]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -253,7 +256,7 @@ jobs:
 
   github-release:
     name: Create GitHub release
-    needs: [build-python, build-rpm, build-standalone, build-apk]
+    needs: [build-python, build-rpm, build-standalone, build-apk, build-docker]
     runs-on: ubuntu-latest
     permissions:
       contents: write

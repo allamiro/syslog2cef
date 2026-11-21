@@ -17,8 +17,11 @@ which:
 5. GPG-signs all artifacts when signing secrets are configured (detached
    `.asc` signatures for everything, `rpmsign` for the RPMs) and signs
    the `SHA256SUMS` file.
-6. Creates a GitHub Release with generated notes and all of the above.
-7. Publishes the sdist and wheel to PyPI.
+6. Pushes the multi-arch container image to
+   `ghcr.io/allamiro/syslog2cef` (version tag and `latest`), only after
+   all of the builds above have passed.
+7. Creates a GitHub Release with generated notes and all of the above.
+8. Publishes the sdist and wheel to PyPI.
 
 ## Cutting a Release
 

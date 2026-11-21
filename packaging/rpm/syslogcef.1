@@ -66,7 +66,9 @@ Force a specific parser instead of auto-detection. One of
 .BR journald_iso ,
 .BR cisco_seq ,
 .BR iso_syslog ,
-.BR kv .
+.BR kv ,
+or the name of a pattern loaded with
+.BR \-\-patterns .
 .SS Conversion
 .TP
 .BI \-\-mapping " FILE"
@@ -74,19 +76,44 @@ Use the mapping JSON file \fIFILE\fR. When omitted, a bundled mapping
 is selected automatically from message content.
 .TP
 .BI \-\-patterns " FILE"
-Load custom parser patterns from the JSON file \fIFILE\fR (repeatable).
-Each pattern has a \fBname\fR, a \fBregex\fR whose named groups map to
-event fields (\fBpri\fR, \fBhost\fR, \fBapp\fR, \fBpid\fR, \fBmsgid\fR,
-\fBmsg\fR, \fBts\fR), a \fBtimestamp_format\fR (strptime format,
-\fBiso8601\fR, or \fBepoch\fR; required when a \fBts\fR group is
-present), and an optional \fBpriority\fR: \fBafter\fR (default; tried
-after the built\-in parsers, before the adaptive fallback) or
-\fBbefore\fR (tried first). Pattern names are accepted by
+Load custom patterns from the JSON file \fIFILE\fR (repeatable; files
+are used in the order given). A pattern is a named regular expression
+whose named groups become event fields. A \fBline\fR pattern parses a
+whole line whose header format no built\-in parser knows; a \fBmsg\fR
+pattern picks fields out of the message of an already parsed event.
+Captured fields are available to mapping templates as
+\fB%(\fR\fIname\fR\fB)s\fR, and a pattern may name the mapping to use
+for the events it matches. See
+.B PATTERN FILES
+below for the format. Pattern names are accepted by
 .BR \-\-mode .
-Files are validated at startup; invalid regexes, unknown groups, or
-duplicate names fail immediately with a clear message. Patterns run
-against untrusted log content \(em keep them anchored and avoid nested
-quantifiers.
+Files are validated at startup; an invalid regex, a reserved group
+name, a bad mapping, or a duplicate name stops the program with exit
+status 2 and a message naming the file and pattern. An unknown key in
+a pattern or example is ignored with a warning on standard error.
+.TP
+.B \-\-check\-patterns
+Run the \fBexamples\fR of every pattern in every
+.B \-\-patterns
+file instead of converting input, and print one line per example,
+.BI "PASS " "pattern " "example " N
+or
+.BI "FAIL " "pattern " "example " N ": " problems\fR,
+followed by
+.IB passed / total " examples passed" .
+Each unknown key in a pattern or example (usually a typo such as
+\fBexmaples\fR) is reported first as
+.BI "FAIL " "pattern " "config: unknown key '" key '
+and counts as a failure.
+Exit status is 0 when all examples pass and no unknown keys were found
+(also when no file defines any examples, which prints
+\fBno examples defined\fR) and 1 otherwise. Requires at
+least one
+.BR \-\-patterns ;
+cannot be combined with \fIPATHS\fR,
+.BR \-\-listen ,
+or
+.BR \-\-tail .
 .TP
 .B \-\-validate
 Check CEF extension values against the ArcSight extension dictionary
@@ -155,6 +182,47 @@ for a complete receive\-convert\-forward daemon.
 Rate-limit
 .B \-\-send
 to at most \fIN\fR events per second.
+.TP
+.B \-\-explain
+Instead of bare CEF, print one block per input line to standard
+output, separated by blank lines:
+.RS
+.PP
+.nf
+\-\-\- line \fIN\fR
+raw:     \fIthe input line\fR
+parser:  \fIparser that read the header\fR
+pattern: \fIline pattern name, or \-\fR
+msg pattern: \fImsg pattern name, or \-\fR
+mapping: \fB\-\-mapping\fR | \fBpattern\fR \fIname\fR | \fBauto\fR \fIbundled\-name\fR
+fields:
+  \fIkey\fR = \fIvalue\fR
+cef:     \fIthe CEF record\fR
+.fi
+.RE
+.IP
+The fields are every value mapping templates can use, except
+\fBraw\fR, sorted by name; a value longer than 200 characters is
+shortened, and a trailing \fB...\fR marks the cut.
+Cannot be combined with
+.BR \-\-send ,
+.BR \-\-output ,
+or
+.BR \-\-multiprocess .
+.TP
+.B \-\-stats
+When input ends (or on interrupt), print a summary to standard error:
+the number of lines, counts by parser and by msg pattern (sorted by
+count), the number of lines no parser recognized (handled by the
+adaptive fallback or kept as raw\-message events), and the first five
+of those lines, each truncated to 200 characters. Works with normal
+output,
+.BR \-\-output ,
+.BR \-\-send ,
+and
+.BR \-\-explain ;
+cannot be combined with
+.BR \-\-multiprocess .
 .SS General
 .TP
 .BI \-\-log\-level " LEVEL"
@@ -167,17 +235,172 @@ Print the version, copyright, license and author, then exit.
 .TP
 .BR \-h ", " \-\-help
 Print a usage summary, then exit.
+.SH PATTERN FILES
+A pattern file is a JSON object with a non\-empty \fBpatterns\fR list.
+Patterns are tried in file order. Each pattern accepts the keys below.
+Any other key in a pattern or an example is ignored with a warning on
+standard error naming the file, pattern and key, and is reported as a
+failure by
+.BR \-\-check\-patterns .
+.TP
+.B name
+Required. Unique name; must not be a built\-in parser name.
+.TP
+.B regex
+Required. A Python regular expression. Shorthands \fB%{\fR\fINAME\fR\fB}\fR
+(match without capturing) and \fB%{\fR\fINAME\fR\fB:\fR\fIfield\fR\fB}\fR
+(capture as \fIfield\fR) insert a predefined regex. \fINAME\fR is one
+of
+.BR IPV4 ,
+.BR IPV6 ,
+.B IP
+(IPv4 or IPv6),
+.BR INT ,
+.BR NUMBER ,
+.BR PORT ,
+.BR WORD ,
+.BR NOTSPACE ,
+.B DATA
+(lazy \fB.*?\fR),
+.B GREEDYDATA
+(\fB.*\fR),
+.BR HOSTNAME ,
+.BR USER ,
+.BR MAC ,
+.BR SYSLOGTIMESTAMP ,
+.BR TIMESTAMP_ISO8601 ,
+.BR QUOTEDSTRING ,
+.BR PATH ,
+or
+.B LOGLEVEL
+(case\-insensitive syslog level words).
+.TP
+.B match
+\fBline\fR (default) applies the regex to the whole raw line with a
+match anchored at its start. Line patterns are tried before
+(\fBpriority\fR \fBbefore\fR) or after (default) the built\-in
+parsers, ahead of the adaptive fallback. The groups \fBpri\fR,
+\fBhost\fR, \fBapp\fR, \fBpid\fR, \fBmsgid\fR, \fBmsg\fR and
+\fBts\fR fill the event header; any other named group becomes a field.
+.IP
+\fBmsg\fR applies the regex to the message of every successfully parsed
+event (built\-in parser, line pattern, adaptive fallback, or forced
+\fB\-\-mode\fR), searching anywhere in it; anchor it with \fB^\fR.
+The first matching msg pattern wins. Every named group becomes a field;
+the header group names above are not allowed.
+.TP
+.B timestamp_format
+Line patterns only; required exactly when the regex has a \fBts\fR
+group. A
+.BR strptime (3)
+format, \fBiso8601\fR, or \fBepoch\fR. Formats without a year get
+the same year inference as the built\-in parsers.
+.TP
+.B priority
+Line patterns only: \fBbefore\fR or \fBafter\fR (default).
+.TP
+.B app
+Msg patterns only: a string or list of strings. The pattern is tried
+only on events whose program name equals one of them, ignoring case.
+.TP
+.B mapping
+A bundled mapping name
+.RB ( cisco_asa ,
+.BR cisco_ios ,
+.BR f5 ,
+.BR fortinet ,
+.BR linux ,
+.BR sophos ,
+.BR vmware )
+or a mapping JSON file, relative paths being resolved against the
+pattern file's directory. Used for the events the pattern matches; a
+matching msg pattern's mapping takes precedence over a line pattern's,
+and
+.B \-\-mapping
+takes precedence over both. Validated at load time.
+.TP
+.B examples
+A list of objects with a required \fBline\fR (a complete input line),
+an optional \fBexpect\fR object of field names and expected values,
+and an optional \fBmatches\fR (default true; false means the pattern
+must not match the line). Run by
+.BR \-\-check\-patterns .
+.TP
+.B description
+Optional free text for people reading the file; not used by syslogcef.
+.PP
+These names are derived by syslogcef and cannot be used as group names
+in either kind of pattern:
+.BR facility ,
+.BR severity ,
+.BR timestamp ,
+.BR ts_orig ,
+.BR source_hint ,
+.BR raw ,
+.BR raw_kv ,
+.BR rt ,
+.BR message_length ,
+.BR message_short ,
+.BR dvcpid .
+.PP
+A captured field with the same name as a key=value pair in the message
+replaces it, and a capture named after a known alias (for example
+\fBsrc_ip\fR) also provides the canonical CEF name (\fBsrc\fR).
+.PP
+Example: OpenSSH logins, mapped with a mapping file that uses
+\fB%(src)s\fR, \fB%(spt)s\fR, \fB%(suser)s\fR, and \fB%(outcome)s\fR:
+.PP
+.nf
+.RS
+{
+  "patterns": [
+    {
+      "name": "sshd_auth",
+      "match": "msg",
+      "app": ["sshd", "sshd\-session"],
+      "regex": "^(?P<outcome>Accepted|Failed) %{NOTSPACE:auth_method} for (?:invalid user )?%{USER:suser} from %{IP:src} port %{PORT:spt}",
+      "mapping": "sshd\-mapping.json",
+      "examples": [
+        {
+          "line": "<38>Nov 21 10:15:09 bastion sshd[2214]: Accepted publickey for deploy from 198.51.100.4 port 40022 ssh2",
+          "expect": {"suser": "deploy", "src": "198.51.100.4", "spt": 40022}
+        }
+      ]
+    }
+  ]
+}
+.RE
+.fi
+.PP
+Pattern regexes run against untrusted input with no time limit: anchor
+them, and never nest unbounded repetition such as
+.B (\ew+\es?)+
+(catastrophic backtracking).
+The source distribution's \fIdocs/patterns.md\fR is a complete
+authoring guide.
 .SH EXIT STATUS
 .TP
 .B 0
 Success.
 .TP
 .B 1
-Strict validation failed, an input file could not be read, or a
-network destination was unreachable after retries.
+Strict validation failed, an input file could not be read, a
+network destination was unreachable after retries, or an example
+failed or an unknown key was found under
+.BR \-\-check\-patterns .
 .TP
 .B 2
-Invalid command-line arguments.
+Invalid command-line arguments, or a pattern or mapping file failed
+validation.
+.TP
+.B 130
+Interrupted (SIGINT, for example Ctrl\-C, the usual way to stop
+.B \-\-tail
+or
+.BR \-\-listen ).
+Output written so far is flushed and any
+.B \-\-stats
+summary is printed first.
 .SH EXAMPLES
 Convert a log file to CEF on standard output:
 .PP
@@ -234,6 +457,18 @@ Force the Cisco ASA mapping and validate the output strictly:
 .nf
 .RS
 syslogcef asa.log \-\-mapping /etc/syslogcef/mapping.json \-\-strict
+.RE
+.fi
+.PP
+Develop a pattern file: see which lines no parser recognizes, inspect
+one line, test the examples, then convert:
+.PP
+.nf
+.RS
+syslogcef \-\-stats /var/log/secure > /dev/null
+grep sshd /var/log/secure | head \-n 3 | syslogcef \-\-explain \-\-patterns sshd.json
+syslogcef \-\-patterns sshd.json \-\-check\-patterns
+syslogcef \-\-patterns sshd.json /var/log/secure \-o secure.cef
 .RE
 .fi
 .PP

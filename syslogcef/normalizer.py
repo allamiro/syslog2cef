@@ -67,12 +67,25 @@ def normalize(event: ParsedEvent) -> NormalizedEvent:
     ts = ensure_tzaware(event.ts) or datetime.now(timezone.utc)
     msg = sanitize_message(event.msg)
     kv = parse_key_value_pairs(msg)
+    # raw_kv reflects the message's own key=value text only. Pattern
+    # captures are merged in afterwards and win over the message text, so
+    # mapping templates can reference them (%(src)s) and the alias pass in
+    # _derive_common_fields canonicalizes them like any other field.
+    raw_kv = " ".join(f"{k}={v}" for k, v in kv.items())
+    # Line-pattern captures come straight from the raw line, so sanitize
+    # them the same way as the message the kv pairs were parsed from.
+    captured = {
+        str(k): sanitize_message(str(v))
+        for k, v in (getattr(event, "fields", None) or {}).items()
+        if v is not None
+    }
+    kv.update(captured)
 
     extras = {
         "message_length": len(msg),
         "message_short": msg[:120],
         "raw": event.raw,
-        "raw_kv": " ".join(f"{k}={v}" for k, v in kv.items()),
+        "raw_kv": raw_kv,
         # Event time as epoch milliseconds for the CEF rt field.
         "rt": str(int(ts.timestamp() * 1000)),
     }
@@ -103,6 +116,9 @@ def normalize(event: ParsedEvent) -> NormalizedEvent:
         msg=msg,
         raw=event.raw,
         source_hint=event.source_hint,
+        fields=captured,
+        pattern=getattr(event, "pattern", None),
+        msg_pattern=getattr(event, "msg_pattern", None),
         kv=kv,
         extras=extras,
     )

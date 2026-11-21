@@ -1,0 +1,21 @@
+{
+  "deviceVendor": "Acme",
+  "deviceProduct": "Firewall",
+  "deviceVersion": "auto",
+  "eventClassId": "acme.%(act)s",
+  "name": "%(act)s %(proto)s %(src)s -> %(dst)s:%(dpt)s",
+  "extensions": {
+    "act": "%(act)s",
+    "proto": "%(proto)s",
+    "src": "%(src)s",
+    "spt": "%(spt)s",
+    "dst": "%(dst)s",
+    "dpt": "%(dpt)s",
+    "shost": "%(host)s",
+    "sproc": "%(app)s",
+    "cs2Label": "ruleId",
+    "cs2": "%(rule)s",
+    "cs1Label": "rawEvent",
+    "cs1": "%(raw)s"
+  }
+}

@@ -146,7 +146,9 @@ def test_register_parser_programmatic():
         ({"regex": r"^x$"}, "missing 'name'"),
         ({"name": "x"}, "missing 'regex'"),
         ({"name": "x", "regex": "("}, "invalid regex"),
-        ({"name": "x", "regex": r"(?P<bogus>\d+)"}, "unknown capture group"),
+        # Extra named groups are captured fields now; only derived field
+        # names are refused.
+        ({"name": "x", "regex": r"(?P<severity>\d+)"}, "reserved for derived fields"),
         ({"name": "x", "regex": r"(?P<ts>\d+)"}, "requires 'timestamp_format'"),
         ({"name": "x", "regex": r"(?P<msg>.*)", "timestamp_format": "%Y"}, "no 'ts' group"),
         ({"name": "x", "regex": r"(?P<ts>\d+)", "timestamp_format": "bogus"}, "must be a strptime format"),

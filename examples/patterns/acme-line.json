@@ -1,0 +1,42 @@
+{
+  "patterns": [
+    {
+      "name": "acme_fw",
+      "regex": "^ACME %{TIMESTAMP_ISO8601:ts} %{HOSTNAME:host} %{WORD:app}\\[%{INT:pid}\\]: (?P<msg>%{WORD:act} %{WORD:proto} %{IPV4:src}:%{PORT:spt} -> %{IPV4:dst}:%{PORT:dpt}.*)$",
+      "timestamp_format": "iso8601",
+      "priority": "after",
+      "mapping": "acme-mapping.json",
+      "examples": [
+        {
+          "line": "ACME 2026-11-21T10:15:02Z fw01 acmefw[311]: DENY tcp 10.1.2.3:51514 -> 192.0.2.10:443 rule=17",
+          "expect": {
+            "host": "fw01",
+            "app": "acmefw",
+            "pid": 311,
+            "act": "DENY",
+            "proto": "tcp",
+            "src": "10.1.2.3",
+            "spt": 51514,
+            "dst": "192.0.2.10",
+            "dpt": 443,
+            "rule": 17
+          }
+        },
+        {
+          "line": "ACME 2026-11-21 10:15:07.250+01:00 fw01.example.net acmefw[311]: ALLOW udp 10.1.2.9:53001 -> 192.0.2.53:53",
+          "expect": {
+            "host": "fw01.example.net",
+            "act": "ALLOW",
+            "proto": "udp",
+            "dst": "192.0.2.53",
+            "dpt": 53
+          }
+        },
+        {
+          "line": "ACME 2026-11-21T10:15:09Z fw01 acmefw[311]: config reloaded by admin",
+          "matches": false
+        }
+      ]
+    }
+  ]
+}

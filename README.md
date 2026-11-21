@@ -141,6 +141,7 @@ Options:
 | `--mode MODE` | Parser override: `rfc3164`, `rfc5424`, `rsyslog_json`, `rsyslog_file`, `journald_json`, `journald_short`, `journald_iso`, `cisco_seq`, `iso_syslog`, `kv`, or a name from `--patterns`. Auto-detected when omitted. |
 | `--mapping FILE` | Mapping JSON file. Auto-selected from message content when omitted. |
 | `--patterns FILE` | Custom parser patterns (see "Custom Parsers"); may be repeated. |
+| `--check-patterns` | Run the `examples` in every `--patterns` file, print `PASS`/`FAIL` per example (and a `FAIL` line per unknown key), and exit 1 if any fail. Takes no input. |
 | `--tail` | Follow input files like `tail -f`. |
 | `--listen PROTO:PORT` | Receive syslog over the network instead of files/stdin: `udp:514`, `tcp:5514`, or `udp:10.0.0.5:514`. |
 | `--send URL` | Forward CEF to `udp://HOST:PORT`, `tcp://HOST:PORT`, or `kafka://BROKER:PORT/TOPIC` (needs the `kafka` extra). |
@@ -149,6 +150,8 @@ Options:
 | `--pool-size N` | Worker count for `--multiprocess` (default: CPU count minus one). |
 | `--validate` | Check CEF extensions against the ArcSight dictionary; violations are logged as warnings. |
 | `--strict` | Like `--validate`, but exit with an error on type or length violations. |
+| `--explain` | Print, per input line, the parser, matched patterns, mapping, all fields, and the CEF record instead of bare CEF. Not with `--output`, `--send`, or `--multiprocess`. |
+| `--stats` | After input ends, print line counts by parser and by msg pattern, plus the first unmatched lines, to stderr. Not with `--multiprocess`. |
 | `--log-level LEVEL` | Python logging level (default `WARNING`). |
 | `--version` | Print the version, copyright, license and author, then exit. |
 
@@ -212,7 +215,8 @@ normalized event's fields:
 - Available template fields include `host`, `app`, `pid`, `msgid`, `msg`,
   `message_short` (first 120 characters), `raw`, `raw_kv`, `event_code`,
   `facility`, `severity`, `ts`, plus every key=value pair extracted from
-  the message and any RFC5424 structured-data or journald fields.
+  the message, any RFC5424 structured-data or journald fields, and the
+  named groups captured by pattern files (see "Custom Parsers").
 
 Field templates that reference missing keys resolve to an empty string
 rather than failing the event. Mapping files and Python mapping dictionaries
@@ -261,45 +265,62 @@ configuration.
 
 ## Custom Parsers
 
-When a device emits a format no built-in parser handles, add your own
-detection regexes the same way you add mappings — no code required:
-
-```bash
-syslogcef acme.log --patterns /etc/syslogcef/patterns.json
-```
+When a device's messages carry values syslogcef does not pick out, or its
+header format is not recognized at all, a pattern file teaches it the format
+without any code. Named regex groups become fields, and a mapping turns
+them into CEF extensions:
 
 ```json
 {
   "patterns": [
     {
-      "name": "acme_fw",
-      "regex": "^ACME (?P<ts>\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}) (?P<host>\\S+) (?P<app>\\w+)\\[(?P<pid>\\d+)\\]: (?P<msg>.*)$",
-      "timestamp_format": "%Y-%m-%d %H:%M:%S",
-      "priority": "after"
+      "name": "sshd_auth",
+      "match": "msg",
+      "app": ["sshd", "sshd-session"],
+      "regex": "^(?P<outcome>Accepted|Failed) %{NOTSPACE:auth_method} for (?:invalid user )?%{USER:suser} from %{IP:src} port %{PORT:spt}",
+      "mapping": "sshd-mapping.json",
+      "examples": [
+        {
+          "line": "<38>Nov 21 10:15:09 bastion sshd[2214]: Accepted publickey for deploy from 198.51.100.4 port 40022 ssh2",
+          "expect": {"outcome": "Accepted", "suser": "deploy", "src": "198.51.100.4", "spt": 40022}
+        }
+      ]
     }
   ]
 }
 ```
 
-- Named groups map to event fields: `pri`, `host`, `app`, `pid`,
-  `msgid`, `msg`, and `ts`.
-- A `ts` group requires `timestamp_format`: a strptime format,
-  `iso8601`, or `epoch`. Yearless formats get the same year inference
-  as the built-in parsers (see "Timestamps without a year" below); an
-  unparseable timestamp never drops the event.
-- `priority` is `"after"` (default: tried after the built-ins, before
-  the adaptive fallback) or `"before"` (tried first, overriding
-  built-ins).
-- Pattern names work as `--mode` values, and files are validated at
-  startup — bad regexes, unknown groups, or duplicate names fail with
-  a clear message instead of mid-stream.
-- Per-service-instance patterns: set
-  `EXTRA_ARGS=--patterns /etc/syslogcef/patterns.json` in the
-  instance's conf.d file.
-- Your regexes run against untrusted log content — keep them anchored
-  and avoid nested quantifiers (ReDoS).
+```bash
+syslogcef --stats /var/log/secure > /dev/null          # which lines need work
+syslogcef --explain --patterns sshd.json < sample.log  # what each line becomes
+syslogcef --patterns sshd.json --check-patterns        # run the examples
+syslogcef --patterns sshd.json /var/log/secure         # convert
+```
 
-From Python, register full parser functions instead:
+- `"match": "msg"` patterns read fields out of the message after the
+  header is parsed; `"match": "line"` (the default) patterns parse a whole
+  line whose header no built-in parser knows, filling `pri`, `host`, `app`,
+  `pid`, `msgid`, `msg`, and `ts` (with `timestamp_format`).
+- Shorthands such as `%{IP:src}`, `%{PORT:spt}` and `%{USER:suser}` stand
+  in for tested regexes. Named groups other than those header fields
+  become fields that mapping templates can use (`%(src)s`).
+- `mapping` (a bundled mapping name or a JSON file next to the pattern
+  file) applies to the events the pattern matches; `--mapping` still wins.
+- Files are validated at startup, so a bad regex or mapping fails with a
+  clear message instead of mid-stream. An unknown key (often a typo such
+  as `"exmaples"`) is ignored with a warning, and `--check-patterns`
+  reports it as a failure. Use `description` for notes. Pattern names also
+  work as `--mode` values.
+- In the service, set `EXTRA_ARGS=--patterns /etc/syslogcef/patterns/sshd.json`.
+- Your regexes run against untrusted log content: anchor them and avoid
+  nested quantifiers (ReDoS).
+
+[docs/patterns.md](docs/patterns.md) is the full guide: a step-by-step
+OpenSSH walkthrough, every pattern key, the shorthand table, examples,
+error messages, and troubleshooting. Ready-to-use files are in
+[examples/patterns/](examples/patterns/).
+
+From Python, load the same files or register full parser functions:
 
 ```python
 from syslogcef import register_parser, load_patterns

@@ -120,7 +120,15 @@ def _listen_tcp(host, port, max_messages, ready_callback) -> Iterator[str]:
             # sees EPIPE). This is inherent to reaping and acceptable —
             # syslog delivery is best-effort and TCP clients reconnect.
             now = _time.monotonic()
-            for sock in [s for s, t in last_seen.items() if now - t > TCP_IDLE_TIMEOUT]:
+            idle = [s for s, t in last_seen.items() if now - t > TCP_IDLE_TIMEOUT]
+            if idle:
+                # last_seen cannot advance while our consumer is busy with
+                # a yielded line, so a client that sent records during a
+                # long stall only looks idle. Spare sockets with input
+                # waiting; the select below reads them.
+                readable = {key.fileobj for key, _events in sel.select(timeout=0)}
+                idle = [s for s in idle if s not in readable]
+            for sock in idle:
                 logger.info("Closing idle connection after %.0fs", TCP_IDLE_TIMEOUT)
                 # Discard any buffered remainder: the receive loop already
                 # emitted every newline-terminated record, so whatever is

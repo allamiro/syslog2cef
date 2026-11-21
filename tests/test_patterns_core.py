@@ -9,7 +9,15 @@ from pathlib import Path
 
 import pytest
 
-from syslogcef import PatternFileError, convert_line, load_patterns, normalize_event, parse_syslog, to_cef
+from syslogcef import (
+    PatternFileError,
+    StreamConverter,
+    convert_line,
+    load_patterns,
+    normalize_event,
+    parse_syslog,
+    to_cef,
+)
 from syslogcef import custom
 from syslogcef.cli import process_lines
 from syslogcef.mappings import CISCO_ASA
@@ -343,6 +351,66 @@ def test_msg_pattern_through_stream_converter(tmp_path: Path):
     assert out[0].startswith("CEF:0|Cisco|ASA|")
     assert "src=10.0.0.1" in cef_ext(out[0])
     assert out[1].startswith("CEF:0|Linux|Syslog|")
+
+
+CONTINUATION = "    Failed password for admin from 10.0.0.9 port 2200 ssh2"
+SSHD_HEADER = "<38>Jan  2 03:04:05 web01 sshd[123]: PAM: authentication details follow"
+
+
+def test_app_filtered_msg_pattern_matches_continuation_line(tmp_path: Path):
+    load_patterns(write_patterns(tmp_path, dict(SSHD_FAILED, mapping="cisco_asa")))
+    converter = StreamConverter()
+
+    _, header = converter.convert_event(SSHD_HEADER, now=NOW)
+    cef, event = converter.convert_event(CONTINUATION, now=NOW)
+
+    assert header.msg_pattern is None
+    assert event.source_hint == "continuation"
+    assert event.app == "sshd"
+    assert event.msg_pattern == "sshd_failed"
+    assert event.fields == {"suser": "admin", "src": "10.0.0.9", "spt": "2200"}
+    # The msg pattern's mapping applies to the continuation line too.
+    assert cef.startswith("CEF:0|Cisco|ASA|")
+    assert "src=10.0.0.9" in cef_ext(cef)
+
+
+def test_app_filtered_msg_pattern_matches_continuation_under_forced_mode(tmp_path: Path):
+    load_patterns(write_patterns(tmp_path, SSHD_FAILED))
+    converter = StreamConverter(mode="rfc3164")
+
+    converter.convert_event(SSHD_HEADER, now=NOW)
+    _, event = converter.convert_event(CONTINUATION, now=NOW)
+
+    assert event.source_hint == "continuation"
+    assert event.msg_pattern == "sshd_failed"
+    assert event.fields["src"] == "10.0.0.9"
+
+
+def test_continuation_of_other_app_does_not_match_app_filtered_msg_pattern(tmp_path: Path):
+    load_patterns(write_patterns(tmp_path, SSHD_FAILED))
+    converter = StreamConverter()
+
+    converter.convert_event("<38>Jan  2 03:04:05 web01 cron[9]: job output follows", now=NOW)
+    _, event = converter.convert_event(CONTINUATION, now=NOW)
+
+    assert event.source_hint == "continuation"
+    assert event.app == "cron"
+    assert event.msg_pattern is None
+    assert event.fields == {}
+
+
+def test_continuation_keeps_msg_pattern_matched_on_first_pass(tmp_path: Path):
+    first = {"name": "any_failed", "match": "msg", "regex": r"Failed password for (?P<duser>\S+)"}
+    load_patterns(write_patterns(tmp_path, first, SSHD_FAILED))
+    converter = StreamConverter()
+
+    converter.convert_event(SSHD_HEADER, now=NOW)
+    _, event = converter.convert_event(CONTINUATION, now=NOW)
+
+    # The unfiltered pattern matched before the app was inherited and is
+    # not replaced by a second pass.
+    assert event.msg_pattern == "any_failed"
+    assert event.fields == {"duser": "admin"}
 
 
 def test_msg_pattern_and_pattern_mapping_with_multiprocess(tmp_path: Path):

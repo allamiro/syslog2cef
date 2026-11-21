@@ -320,6 +320,13 @@ class StreamConverter:
                 parsed.severity = ctx.severity
             parsed.msg = parsed.msg.lstrip()
             parsed.source_hint = "continuation"
+            if parsed.msg_pattern is None:
+                # parse_syslog ran the msg patterns before the line
+                # inherited its app, so msg patterns filtered by app
+                # could not match yet; give them a second chance.
+                from . import custom
+
+                custom.apply_msg_patterns(parsed)
         elif parsed.host is not None and parsed.source_hint != "unknown":
             # Only a line whose host was actually parsed (not the
             # guessed fallback) may become continuation context.

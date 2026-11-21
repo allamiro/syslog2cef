@@ -97,6 +97,8 @@ msg pattern: -
 mapping: auto linux
 fields:
   app = sshd
+  device_host = bastion
+  device_host_long = 
   dvcpid = 2211
   facility = 4
   host = bastion
@@ -323,6 +325,8 @@ mapping: pattern sshd_auth
 fields:
   app = sshd
   auth_method = password
+  device_host = bastion
+  device_host_long = 
   dvcpid = 2211
   facility = 4
   host = bastion
@@ -538,12 +542,14 @@ These names are computed by syslogcef for every event, so a pattern cannot
 capture them:
 
 `facility`, `severity`, `timestamp`, `ts_orig`, `source_hint`, `raw`,
-`raw_kv`, `rt`, `message_length`, `message_short`, `dvcpid`
+`raw_kv`, `rt`, `message_length`, `message_short`, `dvcpid`, `device_host`,
+`device_host_long`
 
 They are all available to mapping templates. `facility` and `severity` come
 from the `pri` value (`severity` can also come from the message when there
 is no PRI), `timestamp`, `ts_orig` and `rt` from `ts`, `dvcpid`
-from `pid`, `message_short` and `message_length` from `msg`.
+from `pid`, `message_short` and `message_length` from `msg`, `device_host`
+and `device_host_long` from `host`.
 
 ### How captured fields reach the CEF record
 

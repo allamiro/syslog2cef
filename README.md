@@ -220,6 +220,22 @@ normalized event's fields:
   `facility`, `severity`, `ts`, plus every key=value pair extracted from
   the message, any RFC5424 structured-data or journald fields, and the
   named groups captured by pattern files (see "Custom Parsers").
+- `device_host` and `device_host_long` carry the same value as `host`,
+  split by the `dvchost` length limit (100 characters): `device_host` is
+  the host when it fits in `dvchost` and empty otherwise, and
+  `device_host_long` is the host only when it is longer. Use them as
+  `"dvchost": "%(device_host)s"` plus `"shost": "%(device_host_long)s"`
+  to report the sending device as `dvchost` while a valid long FQDN
+  stays in `shost` (no truncation, no `--strict` failure).
+- Every mapping inherits the default extensions `msg`, `shost` (the
+  syslog host), `rt` and `cs1Label`/`cs1` (the raw line). Override one to
+  change it, or set it to `""` to omit it.
+- In the bundled Cisco ASA, Cisco IOS and F5 BIG-IP mappings the syslog
+  host is the reporting appliance, so they emit it as `dvchost` (via the
+  pair above) instead of `shost`. A host longer than 100 characters is
+  emitted as `shost` instead. FortiGate and Sophos set `dvchost` from the
+  record's own device name and keep the inherited `shost`; the Linux and
+  VMware mappings report the syslog host as `shost`.
 
 Field templates that reference missing keys resolve to an empty string
 rather than failing the event. Mapping files and Python mapping dictionaries

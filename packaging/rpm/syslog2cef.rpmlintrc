@@ -1,0 +1,10 @@
+# rpmlint filters for syslog2cef. Each entry is a known, reviewed false
+# positive; anything else fails CI and the release build.
+
+# Project and tool names that the English dictionary does not know.
+addFilter(r"spelling-error \('(rsyslog|systemd|syslogcef|journald)'")
+
+# The package was renamed from syslogcef to syslog2cef in 0.4.1, but its
+# config paths, unit names and logrotate file deliberately kept the old
+# name so existing installs upgrade in place.
+addFilter(r"incoherent-logrotate-file /etc/logrotate.d/syslogcef")

@@ -99,3 +99,45 @@ rpm --import RPM-GPG-KEY-syslogcef && rpm --checksig syslog2cef-X.Y.Z-1.noarch.r
 
 A backup of the private key and passphrase is stored offline by the
 maintainer; it is not in the repository.
+
+## Fedora Packaging
+
+Getting `syslog2cef` into the official Fedora repositories is tracked in
+issue #68. What runs on its own and what needs the maintainer:
+
+| Step | How |
+|---|---|
+| Fedora build, `%check` and `rpmlint` on every pull request | CI job `rpm` (`packaging/rpm/build-rpm.sh` in `fedora:44`) |
+| The same build and lint for every release, producing the SRPM a reviewer downloads | release job `Build RPM` (same script) |
+| Test RPM builds on every pull request for all Fedora releases and EPEL 9/10 | Packit `copr_build` (needs the Packit GitHub App installed) |
+| Posting each release's Spec and SRPM URLs to the review request | release step `Update the Fedora review request` (opt-in, below) |
+| After approval: dist-git pull request, Koji build and Bodhi update for each release | Packit `propose_downstream`, `koji_build`, `bodhi_update` |
+| Fedora account, sponsorship, filing the first Review Request bug | the maintainer, once |
+
+`rpmlint` runs with `--strict`, so any warning fails the build. The
+reviewed false positives are listed, with reasons, in
+[packaging/rpm/syslog2cef.rpmlintrc](packaging/rpm/syslog2cef.rpmlintrc);
+add a filter there only for a finding that a Fedora reviewer would also
+waive.
+
+### Review request updates (opt-in)
+
+1. In Bugzilla (bugzilla.redhat.com > Preferences > API Keys), create an
+   API key and save it as the repository secret `BUGZILLA_API_KEY`.
+2. Set the repository variable `FEDORA_REVIEW_BUG` to the Review Request
+   bug number.
+
+Each release then comments on that bug with the new Spec URL and SRPM
+URL, which also makes the Fedora Review Service re-run its automated
+review. Delete the variable once the package is approved.
+
+### Packit
+
+[.packit.yaml](.packit.yaml) is inert until the
+[Packit GitHub App](https://github.com/marketplace/packit-as-a-service)
+is installed on the repository. After installation, pull requests get
+COPR test builds. After the package is approved and its dist-git
+repository exists, each GitHub release opens a dist-git pull request,
+and merging it builds in Koji and files the Bodhi update. The COPR
+project `allamiro/syslogcef` keeps building every push to `main`
+independently.

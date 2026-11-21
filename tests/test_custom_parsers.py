@@ -357,3 +357,15 @@ def test_multiprocess_runs_a_programmatic_parser_mode(tmp_path: Path, monkeypatc
     )
 
     assert len(out) == 1 and "shost=marker" in out[0]
+
+
+def test_replacing_a_loaded_pattern_removes_it_from_auto_detection(tmp_path: Path):
+    # Review on #72: after register_parser(..., replace=True) the old
+    # regex must not keep running under the same name in auto-detection.
+    load_patterns(write_patterns(tmp_path, dict(ACME, priority="before")))
+
+    register_parser("acme_fw", _parse_marker, replace=True)
+
+    event = parse_syslog("ACME 2026-08-11 07:00:00 fw01 nat[42]: allowed tcp")
+    assert event.source_hint != "custom:acme_fw"
+    assert parse_syslog("MARK hi", mode="acme_fw").host == "marker"

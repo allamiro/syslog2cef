@@ -181,6 +181,10 @@ def register_parser(name: str, parser: Callable, *, replace: bool = False) -> No
     if name in _registered and not replace:
         raise ValueError(f"parser '{name}' is already registered")
     _registered[name] = parser
+    # A replaced file pattern must also leave auto-detection, or its regex
+    # would keep matching under the name that now means something else.
+    _before[:] = [p for p in _before if p.name != name]
+    _after[:] = [p for p in _after if p.name != name]
 
 
 def get_registered(name: str) -> Optional[Callable]:

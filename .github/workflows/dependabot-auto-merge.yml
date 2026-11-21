@@ -61,7 +61,15 @@ jobs:
           names=",$(printf '%s' "$DEPENDENCY_NAMES" | tr -d '[:space:]'),"
           reason=""
 
-          if [ "$UPDATE_TYPE" = "version-update:semver-major" ]; then
+          # Match the suffix: fetch-metadata passes through the update-type
+          # Dependabot records, so a security fix may arrive with a prefix
+          # other than version-update and must still be held.
+          case "$UPDATE_TYPE" in
+            *:semver-major) is_major=true ;;
+            *) is_major=false ;;
+          esac
+
+          if [ "$is_major" = true ]; then
             reason="this is a major version update, where a fix is most likely to change behaviour"
           else
             for dep in $shipped_at_runtime; do

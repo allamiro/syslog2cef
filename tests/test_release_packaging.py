@@ -5,7 +5,10 @@ skips outside a git checkout.
 """
 from __future__ import annotations
 
+import os
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -64,3 +67,43 @@ def test_rpm_jobs_install_the_dnf_builddep_plugin(workflow, job):
     job_text = _jobs(workflow)[job]
     assert "bash packaging/rpm/build-rpm.sh" in job_text
     assert re.search(r"dnf install -y[^\n]*(\\\n[^\n]*)*\bdnf5-plugins\b", job_text)
+
+
+# --- Dependabot auto-merge gate ------------------------------------------
+
+
+def _step_script(job_text: str, step_name: str) -> str:
+    """Return the dedented ``run: |`` block of the named step."""
+    step = job_text.split(f"- name: {step_name}", 1)[1]
+    block = step.split("run: |\n", 1)[1]
+    lines = []
+    for line in block.splitlines():
+        if line.strip() and not line.startswith(" " * 10):
+            break
+        lines.append(line[10:])
+    return "\n".join(lines) + "\n"
+
+
+@pytest.mark.parametrize(
+    "update_type, expected",
+    [
+        ("version-update:semver-major", "merge=false"),
+        ("security-update:semver-major", "merge=false"),
+        ("version-update:semver-minor", "merge=true"),
+        ("security-update:semver-patch", "merge=true"),
+    ],
+)
+def test_dependabot_gate_holds_every_major_update(tmp_path, update_type, expected):
+    if shutil.which("bash") is None:
+        pytest.skip("bash is not available")
+    job = _jobs(".github/workflows/dependabot-auto-merge.yml")["auto-merge"]
+    script = _step_script(job, "Decide whether this may merge unattended")
+    output = tmp_path / "github_output"
+    env = dict(
+        os.environ,
+        UPDATE_TYPE=update_type,
+        DEPENDENCY_NAMES="pytest",
+        GITHUB_OUTPUT=str(output),
+    )
+    subprocess.run(["bash", "-c", script], env=env, check=True)
+    assert output.read_text().splitlines()[0] == expected

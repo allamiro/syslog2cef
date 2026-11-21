@@ -400,10 +400,10 @@ instructions, including GPG signing of the RPM.
 ## Security
 
 Log content is treated as untrusted input. Header and extension values are
-escaped per the CEF specification before rendering, and CR/LF are removed
-from header fields so records cannot be split or spoofed. To report a
-vulnerability, see [SECURITY.md](SECURITY.md) — please do not open public
-issues for security reports.
+escaped per the CEF specification before rendering, and CR/LF in header
+fields are replaced with spaces so records cannot be split or spoofed. To
+report a vulnerability, see [SECURITY.md](SECURITY.md) — please do not open
+public issues for security reports.
 
 ## Development
 

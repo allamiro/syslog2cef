@@ -32,10 +32,12 @@ def test_header_pipe_injection_is_escaped():
     assert cef.count("|") - cef.count("\\|") == 7
 
 
-def test_header_newlines_are_stripped():
-    line = "<14>Jan  1 12:34:56 host1 app: first\nsecond"
+def test_header_newlines_become_spaces():
+    # SECURITY.md, README, and the man page document this exact behavior.
+    line = "<14>Jan  1 12:34:56 host1 app: first\rsecond\nthird"
     cef = convert_line(line, mapping={})
-    assert "\n" not in cef
+    assert "\n" not in cef and "\r" not in cef
+    assert cef.split("|")[5] == "first second third"
 
 
 def test_default_linux_mapping_does_not_crash():

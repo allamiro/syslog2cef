@@ -39,8 +39,8 @@ from a file, standard input, or the network.
 - Values placed into CEF extension fields are escaped (backslash, pipe,
   equals sign, CR/LF); NUL bytes are replaced with U+FFFD.
 - Values placed into CEF header fields are escaped (backslash, pipe) and
-  CR/LF are stripped, so crafted log messages cannot forge CEF header fields
-  or split records.
+  CR/LF are replaced with spaces, so crafted log messages cannot forge CEF
+  header fields or split records.
 - With format auto-detection (the default), malformed or unparseable lines
   fall back to a raw-message event instead of raising, so a single hostile
   line cannot abort a stream. A forced `--mode` is strict: a line that parser

@@ -286,8 +286,8 @@ Bundled mapping files, importable from the Python package
 (\fBfrom syslogcef.mappings import load_mapping\fR).
 .SH SECURITY
 All log content is treated as untrusted. Pipes and backslashes are
-escaped in CEF header fields (CR/LF stripped) and pipes, equals signs,
-backslashes, and CR/LF are escaped in extension values, preventing
+escaped in CEF header fields (CR/LF replaced with spaces) and pipes,
+equals signs, backslashes, and CR/LF are escaped in extension values, preventing
 header forgery and record splitting. The listener decodes input as
 UTF-8 with replacement and never evaluates message content. Report
 vulnerabilities privately; see the SECURITY.md file in the source

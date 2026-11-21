@@ -358,10 +358,11 @@ def _mp_load_patterns(pattern_files: list) -> None:
     # Reload pattern files in each pool worker so --patterns works with
     # --multiprocess. Clear first: under the fork start method workers
     # inherit the parent's already-populated registry, and reloading into
-    # it would fail every worker with duplicate-name errors.
-    from .custom import clear_registry, load_patterns
+    # it would fail every worker with duplicate-name errors. Parsers from
+    # register_parser() are kept: a worker cannot recreate them.
+    from .custom import clear_patterns, load_patterns
 
-    clear_registry()
+    clear_patterns()
     for path in pattern_files:
         load_patterns(path)
 

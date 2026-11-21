@@ -292,3 +292,19 @@ def load_patterns(path: Union[str, Path]) -> int:
         (_before if pattern.priority == "before" else _after).append(pattern)
         _registered[pattern.name] = pattern.parse
     return len(loaded)
+
+
+def clear_patterns() -> None:
+    """Forget patterns loaded from files; keep register_parser() parsers.
+
+    Pool workers reload the ``--patterns`` files themselves but have no
+    way to recreate parsers a Python wrapper registered, so those must
+    survive the reset.
+    """
+    programmatic = {
+        name: parser
+        for name, parser in _registered.items()
+        if not isinstance(getattr(parser, "__self__", None), CustomPattern)
+    }
+    clear_registry()
+    _registered.update(programmatic)

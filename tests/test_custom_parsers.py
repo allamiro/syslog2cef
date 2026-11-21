@@ -305,3 +305,55 @@ def test_yearless_pattern_timestamp_is_dated_in_the_past(tmp_path: Path):
 
     new_years_eve = datetime(2026, 12, 31, 23, 59, 58, tzinfo=timezone.utc)
     assert parse("P Jan 01 00:00:05 x", now=new_years_eve).ts.year == 2027
+
+
+def _parse_marker(line):
+    # Module level so a pool worker can find it by reference.
+    from syslogcef.parsers import ParsedEvent
+
+    if not line.startswith("MARK "):
+        return None
+    return ParsedEvent(
+        pri=None, facility=None, severity=None, ts=None, ts_orig="",
+        host="marker", app=None, pid=None, msgid=None,
+        msg=line[5:], raw=line, source_hint="custom:marker",
+    )
+
+
+def test_mp_load_patterns_keeps_programmatic_parsers(tmp_path: Path):
+    # Review on #72: a worker reloads --patterns files, but must not lose
+    # parsers a wrapper registered with register_parser().
+    from syslogcef.cli import _mp_load_patterns
+
+    register_parser("marker", _parse_marker)
+    pattern_file = write_patterns(tmp_path, ACME)
+    load_patterns(pattern_file)
+
+    _mp_load_patterns([str(pattern_file)])  # as a fork-started worker does
+
+    assert custom.get_registered("marker") is _parse_marker
+    assert parse_syslog("ACME 2026-08-11 07:00:00 fw01 nat[42]: ok", mode="acme_fw").source_hint == "custom:acme_fw"
+
+
+def test_multiprocess_runs_a_programmatic_parser_mode(tmp_path: Path, monkeypatch):
+    import multiprocessing
+
+    from syslogcef import cli
+
+    if "fork" not in multiprocessing.get_all_start_methods():
+        pytest.skip("needs the fork start method")
+    # Fork, so workers inherit the parent's registration as they do by
+    # default on Linux before Python 3.14.
+    monkeypatch.setattr(cli, "Pool", multiprocessing.get_context("fork").Pool)
+    register_parser("marker", _parse_marker)
+    pattern_file = write_patterns(tmp_path, ACME)
+    load_patterns(pattern_file)
+
+    out = list(
+        cli.process_lines(
+            ["MARK hello"], mode="marker", mapping=None,
+            use_multiprocessing=True, pool_size=1, pattern_files=[str(pattern_file)],
+        )
+    )
+
+    assert len(out) == 1 and "shost=marker" in out[0]

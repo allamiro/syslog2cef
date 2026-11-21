@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Iterable, Iterator, Optional
 
 from ._version import __author__, __copyright__, __email__, __license__, __version__
-from .api import StreamConverter, convert_line
+from .api import StreamConverter, _convert_forced_fallback, _log_rejected_line
 
 logger = logging.getLogger(__name__)
 
@@ -350,8 +350,16 @@ def write_lines(
             fp.close()
 
 
-def _convert_line_mp(line: str, mode: Optional[str], mapping: Any, validate: bool = False, strict: bool = False) -> str:
-    return convert_line(line, mode=mode, mapping=mapping, validate=validate, strict=strict)
+def _convert_line_mp(line: str, mode: Optional[str], mapping: Any, validate: bool = False, strict: bool = False) -> tuple:
+    """Convert one line in a pool worker; returns ``(cef, rejected_line)``.
+
+    A line a forced ``--mode`` rejects is converted as a raw-message event,
+    as in the single-process path, so one malformed line cannot stop the
+    run. ``rejected_line`` is that line (else None): the parent logs it, so
+    the first-line warning appears once rather than once per worker.
+    """
+    cef, rejected = _convert_forced_fallback(line, mode=mode, mapping=mapping, now=None, validate=validate, strict=strict)
+    return cef, (line if rejected else None)
 
 
 def _mp_load_patterns(pattern_files: list) -> None:
@@ -407,14 +415,21 @@ def process_lines(
         size = pool_size or max(1, cpu_count() - 1)
         with Pool(size, initializer=_mp_load_patterns, initargs=(pattern_files or [],)) as pool:
             worker = partial(_convert_line_mp, mode=mode, mapping=mapping, validate=validate, strict=strict)
-            for cef in pool.imap(worker, (_split_item(item)[1] for item in lines)):
+            rejected_lines = 0
+            for cef, rejected_line in pool.imap(worker, (_split_item(item)[1] for item in lines)):
+                if rejected_line is not None:
+                    rejected_lines += 1
+                    _log_rejected_line(mode, rejected_line, first=rejected_lines == 1)
                 yield cef
     else:
         # Stateful conversion so whitespace-indented continuation lines
         # inherit host/app/timestamp from the preceding event, keyed by
         # source so interleaved files never cross-inherit. Unavailable
         # under --multiprocess, where workers cannot share line order.
-        converter = StreamConverter(mode=mode, mapping=mapping, validate=validate, strict=strict)
+        # A line a forced --mode rejects is converted raw with a warning
+        # rather than raised: one malformed datagram must not stop a
+        # --listen receiver (or a --tail/file run).
+        converter = StreamConverter(mode=mode, mapping=mapping, validate=validate, strict=strict, on_parse_error="raw")
         if not (explain or stats is not None):
             for item in lines:
                 source, line = _split_item(item)

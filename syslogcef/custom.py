@@ -82,7 +82,8 @@ Two ways to teach syslogcef a format it does not know (issue #67):
    aliases such as ``src_ip`` gain their canonical CEF name. Derived
    field names (``facility``, ``severity``, ``timestamp``, ``ts_orig``,
    ``source_hint``, ``raw``, ``raw_kv``, ``rt``, ``message_length``,
-   ``message_short``, ``dvcpid``) cannot be captured.
+   ``message_short``, ``dvcpid``, ``device_host``, ``device_host_long``)
+   cannot be captured.
 
 2. **``register_parser(name, fn)``** — register a full parser function
    ``fn(line) -> ParsedEvent | None`` programmatically; the name becomes
@@ -118,6 +119,7 @@ _RESERVED_GROUPS = frozenset(
     {
         "facility", "severity", "timestamp", "ts_orig", "source_hint", "raw",
         "raw_kv", "rt", "message_length", "message_short", "dvcpid",
+        "device_host", "device_host_long",
     }
 )
 _TS_SPECIAL_FORMATS = {"iso8601", "epoch"}

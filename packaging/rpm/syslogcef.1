@@ -267,8 +267,12 @@ own \fI/etc/conf.d/syslogcef.name\fR.
 .TP
 .I /etc/logrotate.d/syslogcef
 Rotates flat \fI.cef\fR archives under \fI/var/log/syslogcef\fR daily
-using copytruncate (the service keeps its output open). Outputs using
-strftime templates rotate themselves and are not matched.
+using copytruncate (the service keeps its output open). The rule
+matches every \fI.cef\fR file directly in that directory, including a
+strftime-templated output that renders there (\fIevents\-%H.cef\fR),
+which would then be truncated while still in use. Keep templated
+outputs in a subdirectory (\fI%Y\-%m\-%d/events\-%H.cef\fR): they
+rotate themselves and are not matched.
 .TP
 .I syslogcef.service
 systemd unit (RPM and Debian packages). By default the service runs as

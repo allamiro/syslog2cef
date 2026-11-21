@@ -173,3 +173,17 @@ def test_deb_upgrade_restarts_running_services(deb_tree, tmp_path):
 def test_deb_fresh_install_does_not_start_the_service(deb_tree, tmp_path):
     calls = _run_maintainer_script(deb_tree, "postinst", ["configure"], tmp_path)
     assert not [c for c in calls if "start" in c], calls
+
+
+# --- documentation matches what the release produces ----------------------
+
+
+@pytest.mark.parametrize(
+    "doc", ["README.md", "RELEASING.md", "packaging/rpm/README.md", "fuzz/README.md"]
+)
+def test_docs_use_the_renamed_artifact_filenames(doc):
+    # Since 0.4.1 every sdist, SRPM, RPM and zipapp is named syslog2cef-*;
+    # only the command, service and paths keep the syslogcef name.
+    text = _checkout_file(doc).read_text()
+    stale = re.findall(r"syslogcef-(?:\*|X\.Y|\d)[^\s`]*", text)
+    assert not stale, f"{doc} references old artifact names: {stale}"

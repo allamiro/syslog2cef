@@ -103,7 +103,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Mapping, Optional, Set, Tuple, Union
 
 from .parsers import PARSERS, ParsedEvent
 from .shorthands import expand as _expand_shorthands
@@ -288,6 +288,10 @@ _msg_patterns: List[CustomPattern] = []
 _loaded: List[CustomPattern] = []
 # Pattern name -> validated CEF mapping, for patterns with a 'mapping' key.
 _pattern_mappings: Dict[str, Mapping[str, Any]] = {}
+# Names of file patterns that register_parser(..., replace=True) replaced.
+# Reloading the file (as --multiprocess workers do) keeps the override
+# instead of failing on the name it already holds.
+_overridden: Set[str] = set()
 
 
 def register_parser(name: str, parser: Callable, *, replace: bool = False) -> None:
@@ -303,6 +307,8 @@ def register_parser(name: str, parser: Callable, *, replace: bool = False) -> No
         raise ValueError(f"'{name}' is the name of a loaded msg pattern")
     if name in _registered and not replace:
         raise ValueError(f"parser '{name}' is already registered")
+    if isinstance(getattr(_registered.get(name), "__self__", None), CustomPattern):
+        _overridden.add(name)
     _registered[name] = parser
     # A replaced file pattern must also leave auto-detection, or its regex
     # would keep matching under the name that now means something else.
@@ -382,6 +388,7 @@ def clear_registry() -> None:
     del _msg_patterns[:]
     del _loaded[:]
     _pattern_mappings.clear()
+    _overridden.clear()
 
 
 def _resolve_mapping(ref: Any, base_dir: Path, where: str) -> Mapping[str, Any]:
@@ -497,7 +504,7 @@ def load_patterns(path: Union[str, Path]) -> int:
         if name in PARSERS:
             raise PatternFileError(f"{where}: shadows a built-in parser name")
         if (
-            name in _registered
+            (name in _registered and name not in _overridden)
             or any(p.name == name for p in _msg_patterns)
             or any(p.name == name for p in loaded)
         ):
@@ -603,6 +610,11 @@ def load_patterns(path: Union[str, Path]) -> int:
         )
 
     for pattern in loaded:
+        if pattern.name in _overridden:
+            # A register_parser() override owns this name; the file's
+            # version stays out of --mode and auto-detection, as it was
+            # before the reload.
+            continue
         if pattern.match == "msg":
             _msg_patterns.append(pattern)
         else:
@@ -611,7 +623,7 @@ def load_patterns(path: Union[str, Path]) -> int:
         _loaded.append(pattern)
         for warning in pattern.warnings:
             logger.warning("%s: pattern '%s': %s (ignored)", pattern.source, pattern.name, warning)
-    _pattern_mappings.update(mappings)
+    _pattern_mappings.update({k: v for k, v in mappings.items() if k not in _overridden})
     return len(loaded)
 
 
@@ -627,5 +639,7 @@ def clear_patterns() -> None:
         for name, parser in _registered.items()
         if not isinstance(getattr(parser, "__self__", None), CustomPattern)
     }
+    overridden = {name for name in _overridden if name in programmatic}
     clear_registry()
     _registered.update(programmatic)
+    _overridden.update(overridden)

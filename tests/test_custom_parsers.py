@@ -337,6 +337,28 @@ def test_mp_load_patterns_keeps_programmatic_parsers(tmp_path: Path):
     assert parse_syslog("ACME 2026-08-11 07:00:00 fw01 nat[42]: ok", mode="acme_fw").source_hint == "custom:acme_fw"
 
 
+def test_mp_reload_keeps_a_register_parser_override_of_a_file_pattern(tmp_path: Path):
+    # Review on #130: a wrapper loads a pattern file, then overrides one of
+    # its names with register_parser(..., replace=True). A fork-started
+    # worker reloading the file must keep the override instead of failing
+    # with "duplicate name" (which made the pool hang).
+    from syslogcef.cli import _mp_load_patterns
+
+    pattern_file = write_patterns(tmp_path, ACME)
+    load_patterns(pattern_file)
+    register_parser("acme_fw", _parse_marker, replace=True)
+
+    _mp_load_patterns([str(pattern_file)])  # as a fork-started worker does
+
+    assert custom.get_registered("acme_fw") is _parse_marker
+    line = "ACME 2026-08-11 07:00:00 fw01 nat[42]: ok"
+    # The file's regex stays out of auto-detection, as before the reload.
+    assert parse_syslog(line).source_hint != "custom:acme_fw"
+    # Reloading again (a second worker, or a pool restart) still works.
+    _mp_load_patterns([str(pattern_file)])
+    assert custom.get_registered("acme_fw") is _parse_marker
+
+
 def test_multiprocess_runs_a_programmatic_parser_mode(tmp_path: Path, monkeypatch):
     import multiprocessing
 

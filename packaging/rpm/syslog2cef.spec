@@ -37,6 +37,8 @@ BuildArch:      noarch
 BuildRequires:  python%{python3_pkgversion}-devel
 BuildRequires:  pyproject-rpm-macros
 BuildRequires:  systemd-rpm-macros
+# The package ships /etc/logrotate.d/syslogcef.
+Requires:       logrotate
 
 %description
 syslog2cef converts syslog events (RFC3164, RFC5424, rsyslog, and systemd
@@ -70,8 +72,12 @@ install -D -m 0644 %{SOURCE7} %{buildroot}%{_sysusersdir}/syslogcef.conf
 %pyproject_check_import syslogcef
 %pytest
 
+# Fedora 42+ creates sysusers.d users natively and the compat macro expands
+# to nothing there, which would leave an empty %%pre.
+%if ! (0%{?fedora} >= 42)
 %pre
 %sysusers_create_compat %{SOURCE7}
+%endif
 
 %post
 %systemd_post syslogcef.service
@@ -98,10 +104,13 @@ install -D -m 0644 %{SOURCE7} %{buildroot}%{_sysusersdir}/syslogcef.conf
 %config(noreplace) %{_sysconfdir}/syslogcef/conf.d/example.conf.sample
 %config(noreplace) %{_sysconfdir}/logrotate.d/syslogcef
 %{_sysusersdir}/syslogcef.conf
+# Created and chowned at service start by LogsDirectory=; owned here so
+# the logrotate snippet's directory belongs to the package.
+%ghost %dir %attr(0755,root,root) %{_localstatedir}/log/syslogcef
 
 %changelog
 * Sat Nov 21 2026 Tamir Suliman <allamiro@gmail.com> - 0.4.2-1
-- Skip tests that need a git checkout when %check runs from the sdist,
+- Skip tests that need a git checkout when %%check runs from the sdist,
   which stopped the 0.4.1 RPM build
 
 * Sat Nov 21 2026 Tamir Suliman <allamiro@gmail.com> - 0.4.1-1

@@ -126,3 +126,22 @@ def test_redos_smoke(name):
         pattern.fullmatch(subject)
         elapsed = time.perf_counter() - start
         assert elapsed < 1.0, (name, elapsed)
+
+
+@pytest.mark.parametrize(
+    "name, text, expected",
+    [
+        ("IPV6", "peer ::ffff:192.168.1.1 closed", "::ffff:192.168.1.1"),
+        ("IP", "peer ::ffff:192.168.1.1 closed", "::ffff:192.168.1.1"),
+        ("IPV6", "peer 64:ff9b::198.51.100.7 closed", "64:ff9b::198.51.100.7"),
+        ("IPV6", "peer 2001:db8::1 closed", "2001:db8::1"),
+        ("IPV6", "peer fe80::1ff:fe23:4567:890a closed", "fe80::1ff:fe23:4567:890a"),
+        ("IP", "from 203.0.113.7 port 22", "203.0.113.7"),
+    ],
+)
+def test_ip_shorthands_capture_whole_address_with_search(name, text, expected):
+    # Message patterns use re.search, which does not force the address to
+    # be consumed to the end; the capture must still be the full address.
+    match = re.search(expand(f"peer %{{{name}:addr}}|from %{{{name}:addr2}}"), text)
+    assert match is not None
+    assert (match.group("addr") or match.group("addr2")) == expected

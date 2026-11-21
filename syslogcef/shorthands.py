@@ -22,7 +22,10 @@ _IPV4 = (
     r"(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)"
     r"(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}"
 )
-_IPV6 = r"(?:[0-9A-Fa-f]{0,4}:){2,7}(?:[0-9A-Fa-f]{1,4}|(?:\d{1,3}\.){3}\d{1,3})?"
+# The IPv4-suffix alternative comes first: with re.search nothing forces
+# the whole address to be consumed, so trying the hex group first would
+# capture "::ffff:192" out of "::ffff:192.168.1.1".
+_IPV6 = r"(?:[0-9A-Fa-f]{0,4}:){2,7}(?:(?:\d{1,3}\.){3}\d{1,3}|[0-9A-Fa-f]{1,4})?"
 
 SHORTHANDS: Dict[str, str] = {
     "IPV4": _IPV4,

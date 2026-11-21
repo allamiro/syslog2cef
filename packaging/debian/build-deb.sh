@@ -78,6 +78,12 @@ elif ! getent passwd syslogcef >/dev/null 2>&1; then
 fi
 if [ -d /run/systemd/system ]; then
     systemctl daemon-reload >/dev/null 2>&1 || true
+    # On upgrade ("configure <old-version>") the old prerm leaves running
+    # units alone, so restart them onto the new zipapp. try-restart only
+    # touches units that are running; stopped ones stay stopped.
+    if [ "$1" = configure ] && [ -n "$2" ]; then
+        systemctl try-restart syslogcef.service 'syslogcef@*.service' >/dev/null 2>&1 || true
+    fi
 fi
 EOF
 

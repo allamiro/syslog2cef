@@ -53,7 +53,7 @@ To reproduce a COPR build locally:
 sudo dnf install rpkg
 cd packaging/rpm
 rpkg srpm --outdir /tmp/out          # SRPM with the tarball built from git
-rpmbuild --rebuild /tmp/out/syslogcef-*.src.rpm
+rpmbuild --rebuild /tmp/out/syslog2cef-*.src.rpm
 ```
 
 ## Signing the RPM

@@ -47,16 +47,18 @@ Reference run (2026-08-11, 3 minutes): **887,058 executions, zero
 crashes or hangs**.
 
 Crashing inputs are written to the `-artifact_prefix` directory as
-`crash-*` files; reproduce with:
+`crash-*` files (`./artifacts/` with the Docker command above); reproduce
+from the repo root with:
 
 ```bash
-python fuzz/fuzz_convert.py crash-<hash>
+python fuzz/fuzz_convert.py artifacts/crash-<hash>
 ```
 
 ## Corpus
 
 `corpus/` holds one seed per parser family (RFC3164/ASA, RFC5424,
-rsyslog JSON, kernel kv, Cisco seq, kv stream, ISO syslog, an
+rsyslog JSON in both an Elastic-style template and rsyslog's own
+`%jsonmesg%` field names, kernel kv, Cisco seq, kv stream, ISO syslog, an
 adaptive-only shape, a bare PRI, and a CEF-lookalike aimed at the
 escaper). Add a minimized seed here whenever a new format or a fixed
 crash warrants one.

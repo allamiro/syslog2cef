@@ -4,7 +4,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from .utils import (
@@ -17,6 +17,7 @@ from .utils import (
     parse_iso8601,
     parse_key_value_pairs,
     sanitize_message,
+    timezone_from_designator,
 )
 
 logger = logging.getLogger(__name__)
@@ -100,7 +101,7 @@ CISCO_SEQ_RE = re.compile(
     r"(?P<day>\d{1,2})\s+"
     r"(?:(?P<year>\d{4})\s+)?"
     r"(?P<time>\d{2}:\d{2}:\d{2})(?P<frac>\.\d+)?"
-    r"(?:\s+[A-Z]{3,4})?:\s+"
+    r"(?:\s+(?P<tz>[A-Z]{3,4}))?:\s+"
     r"(?P<msg>%[A-Z].*)$"
 )
 
@@ -551,6 +552,11 @@ def parse_cisco_seq(line: str, *, now: Optional[datetime]) -> ParsedEvent | None
         ts = datetime(int(gd["year"]), month, int(gd["day"]), hour, minute, second, microsecond, tzinfo=timezone.utc)
     else:
         ts = _infer_timestamp(month, int(gd["day"]), gd["time"], now=now).replace(microsecond=microsecond)
+    # The clock zone shown by "service timestamps ... show-timezone". An
+    # unknown or ambiguous name keeps the previous reading as UTC.
+    zone = timezone_from_designator(gd.get("tz"))
+    if zone is not None:
+        ts = ts.replace(tzinfo=zone)
     sd = {"cisco.sequence": gd["seq"]} if gd.get("seq") else {}
     return ParsedEvent(
         pri=pri,
@@ -665,21 +671,12 @@ def parse_kv_stream(line: str) -> ParsedEvent | None:
             or ""
         )
     if ts is not None and ts.tzinfo is None:
-        # Apply a numeric offset supplied in the record (tz="-0500");
-        # named zones (timezone="CEST") cannot be resolved portably.
-        offset_match = re.fullmatch(
-            r"([+-])(\d{2}):?(\d{2})",
-            pairs_ci.get("tz") or pairs_ci.get("timezone") or "",
-        )
-        if offset_match:
-            hours, minutes = int(offset_match.group(2)), int(offset_match.group(3))
-            # An out-of-range offset is ignored, keeping the naive timestamp
-            # rather than dropping the event. Check the fields themselves:
-            # timedelta would silently normalize tz=+00:99 to +01:39.
-            if hours <= 23 and minutes <= 59:
-                sign = 1 if offset_match.group(1) == "+" else -1
-                delta = timedelta(hours=hours, minutes=minutes)
-                ts = ts.replace(tzinfo=timezone(sign * delta))
+        # Apply the zone the record supplies (tz="-0500", timezone="CEST").
+        # An invalid or ambiguous one is ignored, keeping the naive
+        # timestamp rather than dropping the event.
+        zone = timezone_from_designator(pairs_ci.get("tz") or pairs_ci.get("timezone"))
+        if zone is not None:
+            ts = ts.replace(tzinfo=zone)
 
     host = (
         pairs_ci.get("devname")

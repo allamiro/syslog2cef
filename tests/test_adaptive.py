@@ -84,6 +84,23 @@ def test_cisco_native_with_year_and_timezone():
     assert normalize_event(ev).severity == 3
 
 
+@pytest.mark.parametrize(
+    "zone, hours", [("UTC", 0), ("PST", -8), ("CEST", 2), ("AEST", 10)]
+)
+def test_cisco_native_timezone_applied(zone, hours):
+    # The zone used to be matched and discarded, labeling 04:00:47 PST as UTC.
+    line = f"Feb  8 2024 04:00:47 {zone}: %LINK-3-UPDOWN: Interface Gi0/1, changed state to down"
+    ev = parse_syslog(line)
+    assert ev.ts.utcoffset().total_seconds() == hours * 3600
+    assert (ev.ts.hour, ev.ts.minute, ev.ts.second) == (4, 0, 47)
+
+
+def test_cisco_ambiguous_timezone_is_left_as_utc():
+    # CST is US Central or China Standard Time; there is no safe choice.
+    line = "Feb  8 2024 04:00:47 CST: %LINK-3-UPDOWN: Interface Gi0/1, changed state to down"
+    assert parse_syslog(line).ts.utcoffset().total_seconds() == 0
+
+
 # --- ISO syslog without RFC5424 framing ---------------------------------------
 
 def test_iso_timestamp_with_pri_and_tag():
@@ -151,6 +168,19 @@ def test_kv_numeric_timezone_applied():
     line = 'date=2020-04-23 time=12:32:48 devname="fw1" logid="0100000001" tz="-0500" x=1'
     ev = parse_syslog(line)
     assert ev.ts.utcoffset().total_seconds() == -5 * 3600
+
+
+def test_kv_named_timezone_applied():
+    # SOPHOS_LINE carries timezone="CEST": 14:38:48 local is 12:38:48 UTC,
+    # not 14:38:48 UTC.
+    ev = parse_syslog(SOPHOS_LINE)
+    assert ev.ts.utcoffset().total_seconds() == 2 * 3600
+    assert normalize_event(ev).ts.timestamp() == 1589805528
+
+
+def test_kv_ambiguous_named_timezone_is_ignored():
+    line = 'date=2020-05-18 time=14:38:48 timezone="IST" device_name="XG230" log_id=1 a=1'
+    assert parse_syslog(line).ts.tzinfo is None
 
 
 @pytest.mark.parametrize("tz", ["+00:99", "+12:60", "-1260", "+2500", "+24:00"])

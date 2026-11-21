@@ -130,6 +130,43 @@ def latest_past_occurrence(
     return None
 
 
+# UTC offsets in minutes for zone abbreviations that name a single offset.
+# Ambiguous abbreviations are deliberately absent and resolve to nothing:
+# CST (US Central or China), IST (India, Israel or Ireland), BST (British
+# Summer or Bangladesh), AST (Atlantic or Arabia).
+_TZ_ABBREVIATION_MINUTES = {
+    "UTC": 0, "GMT": 0, "WET": 0, "WEST": 60,
+    "CET": 60, "CEST": 120, "EET": 120, "EEST": 180, "MSK": 180,
+    "EST": -300, "EDT": -240, "CDT": -300, "MST": -420, "MDT": -360,
+    "PST": -480, "PDT": -420, "AKST": -540, "AKDT": -480, "HST": -600,
+    "JST": 540, "KST": 540, "AWST": 480, "ACST": 570, "ACDT": 630,
+    "AEST": 600, "AEDT": 660, "NZST": 720, "NZDT": 780,
+}
+_TZ_NUMERIC_RE = re.compile(r"([+-])(\d{2}):?(\d{2})")
+
+
+def timezone_from_designator(text: Optional[str]) -> Optional[timezone]:
+    """Resolve "+HH:MM", "+HHMM" or an unambiguous abbreviation ("CEST").
+
+    Returns ``None`` for anything else, including out-of-range numeric
+    offsets: timedelta would silently normalize "+00:99" to +01:39.
+    """
+
+    if not text:
+        return None
+    match = _TZ_NUMERIC_RE.fullmatch(text)
+    if match:
+        hours, minutes = int(match.group(2)), int(match.group(3))
+        if hours > 23 or minutes > 59:
+            return None
+        sign = 1 if match.group(1) == "+" else -1
+        return timezone(sign * timedelta(hours=hours, minutes=minutes))
+    minutes = _TZ_ABBREVIATION_MINUTES.get(text.upper())
+    if minutes is None:
+        return None
+    return timezone(timedelta(minutes=minutes))
+
+
 def ensure_tzaware(ts: Optional[datetime]) -> Optional[datetime]:
     if ts is None:
         return None

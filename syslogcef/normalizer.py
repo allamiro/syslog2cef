@@ -81,8 +81,10 @@ def normalize(event: ParsedEvent) -> NormalizedEvent:
     # PROCID (and kv pids) may be arbitrary strings ("worker-A"); expose
     # a numeric-only alias so mappings can emit dvcpid without tripping
     # strict validation. ASCII check: isdigit() alone accepts Unicode
-    # digits that int() consumers reject.
-    pid = str(event.pid) if event.pid is not None else ""
+    # digits that int() consumers reject. A kv pid= fills in only when the
+    # header carried none, matching the envelope precedence for %(pid)s.
+    pid = event.pid if event.pid is not None else kv.get("pid")
+    pid = str(pid) if pid is not None else ""
     if pid.isascii() and pid.isdigit():
         extras["dvcpid"] = pid
 

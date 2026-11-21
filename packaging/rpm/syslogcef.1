@@ -22,8 +22,10 @@ and ISO), native Cisco console output (sequence numbers and clock-state
 markers), ISO-timestamp syslog with PRI, and key=value streams
 (Fortinet FortiGate, Sophos XG). Lines matching none of these are
 analyzed adaptively: a timestamp shape and host candidate are located
-and a pattern for the layout is synthesized and cached. Unparseable
-lines never abort the stream; they fall back to a raw-message event.
+and a pattern for the layout is synthesized and cached. With
+auto-detection, unparseable lines never abort the stream; they fall
+back to a raw-message event. With a forced \fB\-\-mode\fR, a line that
+parser rejects stops the run with an error.
 .PP
 Vendor mappings for Cisco ASA/IOS, F5 BIG-IP, Fortinet, Sophos,
 VMware, and generic Linux are bundled and selected automatically from

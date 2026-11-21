@@ -42,8 +42,10 @@ platforms that consume CEF.
   fields, so crafted messages cannot forge header fields or split records.
 - Streaming CLI with stdin/file input, tail (follow) mode across multiple
   files, optional multiprocessing, and no runtime dependencies.
-- Malformed lines never abort a stream: unparseable input falls back to a
-  raw-message event.
+- With format auto-detection (the default), malformed lines never abort a
+  stream: unparseable input falls back to a raw-message event. A forced
+  `--mode` instead stops with an error at the first line that parser
+  rejects.
 
 ## Installation
 
@@ -375,7 +377,7 @@ installed there) and has independent restart, logs, and options:
 sudo cp /etc/syslogcef/conf.d/example.conf.sample /etc/syslogcef/conf.d/secure.conf
 sudo cp /etc/syslogcef/conf.d/example.conf.sample /etc/syslogcef/conf.d/firewall.conf
 sudo vi /etc/syslogcef/conf.d/secure.conf     # /var/log/secure  -> secure.cef
-sudo vi /etc/syslogcef/conf.d/firewall.conf   # --listen udp:514 --mode cisco_seq
+sudo vi /etc/syslogcef/conf.d/firewall.conf   # --listen udp:514
 sudo systemctl enable --now syslogcef@secure syslogcef@firewall
 ```
 

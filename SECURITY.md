@@ -41,8 +41,11 @@ from a file, standard input, or the network.
 - Values placed into CEF header fields are escaped (backslash, pipe) and
   CR/LF are stripped, so crafted log messages cannot forge CEF header fields
   or split records.
-- Malformed or unparseable lines fall back to a raw-message event instead of
-  raising, so a single hostile line cannot abort a stream.
+- With format auto-detection (the default), malformed or unparseable lines
+  fall back to a raw-message event instead of raising, so a single hostile
+  line cannot abort a stream. A forced `--mode` is strict: a line that parser
+  rejects stops the run, so do not force a mode on input an attacker can
+  write to, such as a `--listen` socket.
 
 Reports of any bypass of the above — content that still results in header
 injection, record splitting, or a crash on attacker-controlled input — are in

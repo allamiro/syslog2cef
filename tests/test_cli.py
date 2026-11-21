@@ -62,6 +62,33 @@ def test_follow_files_picks_up_appended_lines(tmp_path: Path):
     assert "new" in list(gen)
 
 
+def test_follow_files_busy_file_does_not_starve_later_files(tmp_path: Path):
+    # Review on #11: a file that always has another line ready never
+    # reaches EOF, so draining each file to EOF per pass would never
+    # visit the files after it.
+    from syslogcef.cli import follow_files
+
+    busy = tmp_path / "busy.log"
+    quiet = tmp_path / "quiet.log"
+    busy.write_text("busy-0\n", encoding="utf-8")
+    quiet.write_text("quiet-1\n", encoding="utf-8")
+
+    gen = follow_files([busy, quiet], poll_interval=0, max_idle_polls=1)
+    seen = []
+    with busy.open("a", encoding="utf-8") as writer:
+        for i in range(1, 1000):
+            line = next(gen)
+            seen.append(line)
+            if line == "quiet-1":
+                break
+            # Keep the busy file one line ahead of the reader.
+            writer.write(f"busy-{i}\n")
+            writer.flush()
+    gen.close()
+
+    assert "quiet-1" in seen
+
+
 def test_write_lines_plain_truncates(tmp_path: Path):
     from syslogcef.cli import write_lines
 

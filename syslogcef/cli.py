@@ -96,19 +96,25 @@ class _Follower:
         self.fp_len = min(self._FINGERPRINT_LEN, self.handle.tell())
         self.fingerprint = self._read_head(self.fp_len)
 
-    def read_lines(self) -> Iterator[str]:
-        while self.pending:
+    def read_lines(self, limit: Optional[int] = None) -> Iterator[str]:
+        """Yield available lines, at most ``limit`` of them when given."""
+        count = 0
+        while self.pending and (limit is None or count < limit):
+            count += 1
             yield self.pending.popleft()
         if self.handle is None:
             return
-        while True:
+        while limit is None or count < limit:
             line = self.handle.readline()
             if not line:
-                # At EOF: record the consumed-head fingerprint so the next
-                # rotation check can tell an append from an in-place rewrite.
-                self._capture_fingerprint()
-                return
+                break
+            count += 1
             yield line.rstrip("\n")
+        # Record the consumed-head fingerprint so the next rotation check
+        # can tell an append from an in-place rewrite. Also done when the
+        # limit stops us short of EOF, so a file that never goes idle still
+        # gets one.
+        self._capture_fingerprint()
 
     def check_rotation(self) -> bool:
         """Reattach after rotation events. Returns True if a replacement
@@ -171,6 +177,9 @@ class _Follower:
             self.handle = None
 
 
+_LINES_PER_PASS = 100
+
+
 def follow_files(
     paths: Iterable[Path],
     *,
@@ -200,7 +209,10 @@ def follow_files(
             any_line = False
             for follower in followers:
                 source = str(follower.path)
-                for line in follower.read_lines():
+                # Bounded per pass: a file that is written as fast as we
+                # read never reaches EOF and would otherwise starve the
+                # files after it.
+                for line in follower.read_lines(limit=_LINES_PER_PASS):
                     any_line = True
                     yield (source, line) if tag_sources else line
             # Rotation is checked for every follower on every pass —

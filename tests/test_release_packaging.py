@@ -208,3 +208,19 @@ def test_fuzz_readme_reproduces_crashes_from_the_artifact_directory():
     assert "-artifact_prefix=/artifacts/" in text
     repro = re.findall(r"python fuzz/fuzz_convert\.py (\S*crash-\S+)", text)
     assert repro and all(path.startswith("artifacts/") for path in repro), repro
+
+
+def test_fuzz_corpus_exercises_rsyslog_json_priority_and_program_fields():
+    from syslogcef.parsers import parse_rsyslog_json
+
+    corpus = _checkout_file("fuzz/corpus")
+    events = []
+    for seed in sorted(corpus.iterdir()):
+        line = seed.read_text().strip()
+        if line.startswith("{"):
+            event = parse_rsyslog_json(line)
+            assert event is not None, seed.name
+            events.append(event)
+    # rsyslog's jsonmesg/RSYSLOG_* templates carry pri and programname;
+    # without a seed using them the fuzzer starts blind to those paths.
+    assert any(e.pri is not None and e.app and e.ts for e in events)

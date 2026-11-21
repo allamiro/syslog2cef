@@ -15,8 +15,6 @@
     "7": "1"
   },
   "extensions": {
-    "shost": "",
-    "dvchost": "%(host)s",
     "src": "%(src)s",
     "dst": "%(dst)s",
     "spt": "%(spt)s",

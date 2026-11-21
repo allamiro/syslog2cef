@@ -5,8 +5,6 @@
   "eventClassId": "ios.%(event_code)s",
   "name": "%(message_short)s",
   "extensions": {
-    "shost": "",
-    "dvchost": "%(host)s",
     "src": "%(src)s",
     "dst": "%(dst)s",
     "cs1Label": "rawEvent",

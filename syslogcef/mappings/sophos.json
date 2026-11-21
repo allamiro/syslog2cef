@@ -5,7 +5,6 @@
   "eventClassId": "sophos.%(log_id)s",
   "name": "%(message_short)s",
   "extensions": {
-    "shost": "",
     "dvchost": "%(device_name)s",
     "src": "%(src_ip)s",
     "dst": "%(dst_ip)s",

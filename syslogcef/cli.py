@@ -450,8 +450,11 @@ def _read_input(lines: Iterable[Any], feed: queue.Queue, stop: threading.Event) 
                 pass
         return False
 
-    iterator = iter(lines)
+    iterator = None
     try:
+        # Inside the try: iter() itself can fail (a closed file, say), and
+        # that error must reach the consumer too or it waits forever.
+        iterator = iter(lines)
         for item in iterator:
             if not put(_split_item(item)[1]):
                 return

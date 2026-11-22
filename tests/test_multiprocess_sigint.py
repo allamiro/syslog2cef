@@ -62,6 +62,36 @@ def _descendants(pid: int) -> list | None:
     return found
 
 
+def _is_zombie(pid: int) -> bool:
+    """True for a process that has exited but was not reaped yet.
+
+    In a container whose PID 1 does not reap orphans, an exited
+    multiprocessing helper stays a zombie (state Z) forever and still
+    answers os.kill(pid, 0); it is not a running worker.
+    """
+    try:
+        import psutil
+    except ImportError:
+        psutil = None
+    if psutil is not None:
+        try:
+            return psutil.Process(pid).status() == psutil.STATUS_ZOMBIE
+        except psutil.NoSuchProcess:
+            return False
+    try:
+        with open(f"/proc/{pid}/stat", encoding="ascii", errors="replace") as stat:
+            # Field 3, after the parenthesized command name (which may
+            # itself contain spaces or parentheses).
+            return stat.read().rsplit(")", 1)[1].split()[0] == "Z"
+    except (OSError, IndexError):
+        pass
+    ps = shutil.which("ps")
+    if ps is not None:
+        result = subprocess.run([ps, "-o", "stat=", "-p", str(pid)], capture_output=True, text=True)
+        return result.stdout.strip().startswith("Z")
+    return False
+
+
 def _alive(pid: int) -> bool:
     try:
         os.kill(pid, 0)
@@ -69,7 +99,7 @@ def _alive(pid: int) -> bool:
         return False
     except PermissionError:
         return True
-    return True
+    return not _is_zombie(pid)
 
 
 class _Cli:
@@ -254,3 +284,41 @@ def test_multiprocess_strict_failure_after_earlier_records():
         for cef in process_lines(lines, mode=None, mapping=None, use_multiprocessing=True, pool_size=1, validate=True, strict=True):
             out.append(cef)
     assert len(out) == 5
+
+
+def test_multiprocess_input_that_cannot_be_iterated_raises(tmp_path: Path):
+    # Review on #143: iter() failing in the reader thread (a closed file)
+    # must reach the caller, not leave it waiting forever.
+    from syslogcef.cli import process_lines
+
+    handle = (tmp_path / "in.log").open("w+", encoding="utf-8")
+    handle.close()
+    outcome: dict = {}
+
+    def run() -> None:
+        try:
+            list(process_lines(handle, mode=None, mapping=None, use_multiprocessing=True, pool_size=1))
+        except Exception as exc:  # recorded for the assertion below
+            outcome["error"] = exc
+
+    worker = threading.Thread(target=run, daemon=True)
+    worker.start()
+    worker.join(30)
+    assert not worker.is_alive(), "process_lines hung on an input that cannot be iterated"
+    assert isinstance(outcome.get("error"), ValueError)
+
+
+def test_exited_but_unreaped_child_does_not_count_as_alive():
+    # Review on #143: where PID 1 does not reap orphans, an exited helper
+    # stays a zombie that still answers os.kill(pid, 0).
+    child = subprocess.Popen([sys.executable, "-c", "pass"])
+    pid = child.pid
+    try:
+        deadline = time.monotonic() + 10
+        while not _is_zombie(pid):
+            assert time.monotonic() < deadline, "child did not exit"
+            time.sleep(0.05)
+        os.kill(pid, 0)  # still in the process table
+        assert not _alive(pid)
+    finally:
+        child.wait()

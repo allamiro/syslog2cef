@@ -119,3 +119,37 @@ def test_adaptive_mon_day_is_dated_in_the_past():
     src, conv = next((s, c) for n, s, c in TIMESTAMP_LIB if n == "mon_day")
     ts = conv(re.compile(src).match("Jan  1 12:34:56"), datetime(2026, 11, 20, tzinfo=timezone.utc))
     assert ts.year == 2026
+
+
+def test_rsyslog_jsonmesg_drops_the_tag_separator_space():
+    # rsyslog's %jsonmesg% msg keeps the space after "tag:"; it must not
+    # reach the CEF name or msg (other parsers drop that separator).
+    import json as _json
+
+    from syslogcef import convert_line, parse_syslog
+
+    record = _json.dumps({
+        "msg": " GET / 200", "hostname": "web", "programname": "nginx",
+        "syslogtag": "nginx:", "pri": "190", "inputname": "imuxsock",
+        "timereported": "2026-11-21T10:00:00+00:00",
+    })
+    assert parse_syslog(record).msg == "GET / 200"
+    assert convert_line(record).split("|")[5] == "GET / 200"
+    # Only the one separator space goes: deliberate indentation remains.
+    indented = record.replace('" GET / 200"', '"   indented"')
+    assert parse_syslog(indented).msg == "  indented"
+
+
+def test_impossible_timestamp_in_a_known_format_logs_no_traceback(caplog):
+    # A line shaped like rsyslog-file/journald-iso but with an offset of
+    # -30:00 used to log an ERROR traceback per line (seen in fuzzing),
+    # which lets any sender flood the log. It falls through quietly.
+    import logging
+
+    from syslogcef import convert_line
+
+    with caplog.at_level(logging.DEBUG, logger="syslogcef"):
+        cef = convert_line("6280-20-11T07:00:08-30:00 host app: hello")
+    assert cef.startswith("CEF:0|")
+    assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
+    assert not any(r.exc_info for r in caplog.records)

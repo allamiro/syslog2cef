@@ -7,13 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
+### Removed
 
-- Releases publish the container image under both
-  `ghcr.io/allamiro/syslog2cef` and its name before 0.4.1,
-  `ghcr.io/allamiro/syslogcef`, so users of the old name are no longer
-  left on 0.4.0. The old name will be retired on a date announced in the
-  README.
+- The container image's name before 0.4.1, `ghcr.io/allamiro/syslogcef`,
+  is retired; its last release there was 0.4.0. Pull
+  `ghcr.io/allamiro/syslog2cef`, the only name that receives releases.
 
 ## [0.6.1] - 2026-11-22
 

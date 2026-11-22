@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import signal
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -12,9 +13,15 @@ from syslogcef import custom
 
 @pytest.fixture(autouse=True)
 def _clean_registry():
+    # _mp_load_patterns() ignores SIGINT, as a pool worker should. Called
+    # here in the test process, that would leak into every later
+    # subprocess (an ignored signal stays ignored across exec), and
+    # Ctrl-C tests further on would never see their SIGINT.
+    sigint = signal.getsignal(signal.SIGINT)
     custom.clear_registry()
     yield
     custom.clear_registry()
+    signal.signal(signal.SIGINT, sigint)
 
 
 def write_patterns(tmp_path: Path, *entries) -> Path:

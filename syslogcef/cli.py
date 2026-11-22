@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import argparse
 import logging
+import queue
 import sys
+import threading
 import time
+from collections import deque
 from datetime import datetime
 from functools import partial
 from multiprocessing import Pool, cpu_count
@@ -391,6 +394,149 @@ def _split_item(item: Any) -> tuple:
     return ("", item)
 
 
+def _convert_chunk_mp(lines: list, mode: Optional[str], mapping: Any, validate: bool = False, strict: bool = False) -> tuple:
+    """Convert a chunk of lines in a pool worker; returns ``(results, error)``.
+
+    ``results`` holds one :func:`_convert_line_mp` tuple per line converted.
+    A line that raises (e.g. ``--strict`` validation) ends the chunk: the
+    exception is returned as ``error`` so the parent can emit the records
+    before it, in order, and then raise it, as a per-line ``imap`` would.
+    """
+    results = []
+    try:
+        for line in lines:
+            results.append(_convert_line_mp(line, mode, mapping, validate=validate, strict=strict))
+    except Exception as exc:
+        return results, exc
+    return results, None
+
+
+# Lines per pool task under --multiprocess, and pool tasks in flight per
+# worker. A chunk is only as large as the input already waiting, so a
+# --tail or --listen line is converted as soon as it arrives.
+_MP_CHUNK = 256
+_MP_TASKS_PER_WORKER = 4
+# Seconds between checks for Ctrl-C while blocked (lock waits are not
+# interruptible on every platform).
+_MP_POLL = 0.5
+
+_INPUT_END = object()
+
+
+class _InputFailed:
+    """Carries an exception raised by the input iterator to the consumer."""
+
+    __slots__ = ("exc",)
+
+    def __init__(self, exc: BaseException):
+        self.exc = exc
+
+
+def _read_input(lines: Iterable[Any], feed: queue.Queue, stop: threading.Event) -> None:
+    """Move lines from ``lines`` to ``feed`` until the input ends or ``stop`` is set.
+
+    Runs in a daemon thread: ``--tail`` and ``--listen`` inputs block
+    forever waiting for data, so the thread that waits on them must not
+    be one the process has to join to exit (it would be the pool's task
+    handler if ``lines`` went to ``imap`` directly).
+    """
+
+    def put(item: Any) -> bool:
+        while not stop.is_set():
+            try:
+                feed.put(item, timeout=_MP_POLL)
+                return True
+            except queue.Full:
+                pass
+        return False
+
+    iterator = iter(lines)
+    try:
+        for item in iterator:
+            if not put(_split_item(item)[1]):
+                return
+    except BaseException as exc:  # re-raised by the consuming thread
+        put(_InputFailed(exc))
+    else:
+        put(_INPUT_END)
+    finally:
+        close = getattr(iterator, "close", None)
+        if close is not None:
+            close()
+
+
+def _take_chunk(feed: queue.Queue, *, block: bool) -> tuple:
+    """Return ``(lines, end)``: up to ``_MP_CHUNK`` waiting lines and the end marker, if reached.
+
+    With ``block`` waits for the first line; otherwise takes only what is
+    already queued.
+    """
+    lines: list = []
+    while len(lines) < _MP_CHUNK:
+        try:
+            if block and not lines:
+                item = feed.get(timeout=_MP_POLL)
+            else:
+                item = feed.get_nowait()
+        except queue.Empty:
+            if block and not lines:
+                continue
+            break
+        if item is _INPUT_END or isinstance(item, _InputFailed):
+            return lines, item
+        lines.append(item)
+    return lines, None
+
+
+def _process_lines_mp(lines: Iterable[Any], *, mode: Optional[str], mapping: Any, pool_size: Optional[int], validate: bool, strict: bool, pattern_files: Optional[list]) -> Iterator[str]:
+    """Convert lines in a process pool, yielding CEF records in input order.
+
+    A daemon thread reads the input into a bounded queue; this thread is
+    the only one that feeds the pool, a chunk of already-waiting lines at
+    a time, and it never hands the pool an input that can block. So
+    Ctrl-C reaches it directly and the pool shuts down at once, even when
+    ``lines`` never ends (``--tail``, ``--listen``).
+    """
+    size = pool_size or max(1, cpu_count() - 1)
+    max_pending = size * _MP_TASKS_PER_WORKER
+    feed: queue.Queue = queue.Queue(maxsize=_MP_CHUNK * max_pending)
+    stop = threading.Event()
+    with Pool(size, initializer=_mp_load_patterns, initargs=(pattern_files or [],)) as pool:
+        convert = partial(_convert_chunk_mp, mode=mode, mapping=mapping, validate=validate, strict=strict)
+        reader = threading.Thread(target=_read_input, args=(lines, feed, stop), name="syslogcef-input", daemon=True)
+        reader.start()
+        try:
+            pending: deque = deque()
+            end = None
+            rejected_lines = 0
+            while True:
+                # Submit what input is waiting; block for more only when
+                # nothing is in flight, so finished records are never held
+                # back waiting for the next line to arrive.
+                while end is None and len(pending) < max_pending:
+                    chunk, end = _take_chunk(feed, block=not pending)
+                    if not chunk:
+                        break
+                    pending.append(pool.apply_async(convert, (chunk,)))
+                if not pending:
+                    break
+                task = pending.popleft()
+                while not task.ready():
+                    task.wait(_MP_POLL)
+                results, error = task.get()
+                for cef, rejected_line in results:
+                    if rejected_line is not None:
+                        rejected_lines += 1
+                        _log_rejected_line(mode, rejected_line, first=rejected_lines == 1)
+                    yield cef
+                if error is not None:
+                    raise error
+            if isinstance(end, _InputFailed):
+                raise end.exc
+        finally:
+            stop.set()
+
+
 def process_lines(
     lines: Iterable[Any],
     *,
@@ -412,15 +558,7 @@ def process_lines(
     counted. Neither is available with ``use_multiprocessing``.
     """
     if use_multiprocessing:
-        size = pool_size or max(1, cpu_count() - 1)
-        with Pool(size, initializer=_mp_load_patterns, initargs=(pattern_files or [],)) as pool:
-            worker = partial(_convert_line_mp, mode=mode, mapping=mapping, validate=validate, strict=strict)
-            rejected_lines = 0
-            for cef, rejected_line in pool.imap(worker, (_split_item(item)[1] for item in lines)):
-                if rejected_line is not None:
-                    rejected_lines += 1
-                    _log_rejected_line(mode, rejected_line, first=rejected_lines == 1)
-                yield cef
+        yield from _process_lines_mp(lines, mode=mode, mapping=mapping, pool_size=pool_size, validate=validate, strict=strict, pattern_files=pattern_files)
     else:
         # Stateful conversion so whitespace-indented continuation lines
         # inherit host/app/timestamp from the preceding event, keyed by

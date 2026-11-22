@@ -93,6 +93,11 @@ Container Registry on each release:
 docker run -i ghcr.io/allamiro/syslog2cef < /var/log/syslog
 ```
 
+The image is also published under its name before 0.4.1,
+`ghcr.io/allamiro/syslogcef`, with the same tags, so existing pulls keep
+receiving updates. That name will be retired on a date announced here;
+switch to `ghcr.io/allamiro/syslog2cef` when convenient.
+
 Fedora, RHEL/Alma/Rocky 9 and 10, and CentOS Stream users can install
 from the [COPR repository](https://copr.fedorainfracloud.org/coprs/allamiro/syslogcef/),
 which rebuilds automatically from every commit:

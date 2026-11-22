@@ -361,6 +361,11 @@ def parse_rsyslog_json(line: str) -> ParsedEvent | None:
         app = data["syslogtag"].rstrip(":").split("[")[0] or None
     pid = data.get("procid") or data.get("pid")
     msg = str(data.get("msg") or data.get("message") or "")
+    if "msg" in data and msg.startswith(" "):
+        # rsyslog's msg property keeps the space that separates the tag from
+        # the message in RFC 3164 ("nginx: GET /" -> " GET /"); the other
+        # parsers drop that separator, so do the same here.
+        msg = msg[1:]
     sd = {k: v for k, v in data.items() if isinstance(k, str) and k.startswith("structured-data")}
     return ParsedEvent(
         pri=pri,
@@ -784,6 +789,13 @@ def autodetect_and_parse(line: str, *, mode: Optional[str] = None, now: Optional
                 result = parser(line, now=now) if "now" in parser.__code__.co_varnames else parser(line)
                 if result is not None:
                     return result
+        except (ValueError, OverflowError) as exc:
+            # The line looks like this format but carries an impossible
+            # value, such as a timestamp offset of -30:00. That is untrusted
+            # input, not a bug: try the next parser without a traceback,
+            # which would otherwise let any sender flood the log per line.
+            logger.debug("Parser %s rejected line: %s", key, exc)
+            continue
         except Exception:
             logger.exception("Parser %s failed for line", key)
             continue

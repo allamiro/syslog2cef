@@ -233,7 +233,13 @@ jobs:
       - id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ghcr.io/${{ github.repository_owner }}/syslog2cef
+          # syslogcef is the image name before 0.4.1 and still has users;
+          # publish to it as well until its retirement date is announced
+          # in the README. Older tags can be copied over with the
+          # "Mirror container image" workflow.
+          images: |
+            ghcr.io/${{ github.repository_owner }}/syslog2cef
+            ghcr.io/${{ github.repository_owner }}/syslogcef
           tags: |
             type=semver,pattern={{version}}
             type=raw,value=latest

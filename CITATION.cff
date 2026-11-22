@@ -12,8 +12,8 @@ abstract: >-
 authors:
   - family-names: Suliman
     given-names: Tamir
-version: 0.6.0
-date-released: 2026-11-21
+version: 0.6.1
+date-released: 2026-11-22
 license: MIT
 repository-code: "https://github.com/allamiro/syslog2cef"
 url: "https://pypi.org/project/syslog2cef/"

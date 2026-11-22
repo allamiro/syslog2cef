@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-22
+
+### Fixed
+
+- `--tail --multiprocess` and `--listen --multiprocess` stop on Ctrl-C with
+  exit status 130 instead of hanging, and leave no worker processes
+  behind. Lines now reach the workers in chunks of what is already
+  waiting, which also makes `--multiprocess` batch conversion several
+  times faster; output order is unchanged. An input that cannot be
+  iterated (a closed file) raises instead of hanging.
+- A line shaped like a known format but carrying an impossible value,
+  such as a timestamp offset of `-30:00`, no longer logs an ERROR with a
+  traceback for every such line, which let any sender flood the log. It is
+  logged at DEBUG and the next parser is tried; the line still converts.
+- rsyslog `%jsonmesg%` records no longer keep the tag separator space at
+  the start of the message, so the CEF name reads `GET / 200` instead of
+  ` GET / 200`.
+
 ## [0.6.0] - 2026-11-21
 
 ### Upgrade notes
@@ -582,7 +600,8 @@ Initial release.
 - `--tail` now follows all given input files instead of blocking on the
   first one.
 
-[Unreleased]: https://github.com/allamiro/syslog2cef/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/allamiro/syslog2cef/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/allamiro/syslog2cef/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/allamiro/syslog2cef/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/allamiro/syslog2cef/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/allamiro/syslog2cef/compare/v0.4.1...v0.4.2

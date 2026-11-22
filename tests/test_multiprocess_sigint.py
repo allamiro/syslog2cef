@@ -308,6 +308,7 @@ def test_multiprocess_input_that_cannot_be_iterated_raises(tmp_path: Path):
     assert isinstance(outcome.get("error"), ValueError)
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows has no POSIX zombie processes")
 def test_exited_but_unreaped_child_does_not_count_as_alive():
     # Review on #143: where PID 1 does not reap orphans, an exited helper
     # stays a zombie that still answers os.kill(pid, 0).

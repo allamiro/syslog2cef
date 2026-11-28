@@ -15,7 +15,7 @@ jobs:
     env:
       GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -65,7 +65,7 @@ jobs:
             python3-setuptools python3-wheel \
             pyproject-rpm-macros systemd-rpm-macros
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Build and lint RPM
         run: |
@@ -91,7 +91,7 @@ jobs:
     env:
       GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -152,7 +152,7 @@ jobs:
       - name: Install build tools
         run: apk add --no-cache abuild build-base python3 py3-pip gnupg git
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Build APK
         run: |
@@ -218,7 +218,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: docker/setup-qemu-action@v4
 

@@ -25,7 +25,7 @@ jobs:
         # stable CPython (3.14), and the versions between.
         python-version: ['3.9', '3.10', '3.11', '3.12', '3.13', '3.14']
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v6
         with:
@@ -44,7 +44,7 @@ jobs:
   lint:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -84,7 +84,7 @@ jobs:
             python3-devel python3-build python3-pip \
             python3-setuptools python3-wheel \
             pyproject-rpm-macros systemd-rpm-macros
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Build and lint the RPM
         run: bash packaging/rpm/build-rpm.sh
       - name: Sign the RPM with a throwaway key
@@ -101,7 +101,7 @@ jobs:
   docker:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Lint Dockerfile
         uses: hadolint/hadolint-action@v3.5.0
         with:

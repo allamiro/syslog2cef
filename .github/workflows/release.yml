@@ -45,7 +45,7 @@ jobs:
               --detach-sign --armor "$artifact"
           done
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: python-dist
           path: dist/*
@@ -80,7 +80,7 @@ jobs:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: bash packaging/rpm/sign-rpm.sh
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: rpm-dist
           path: rpms/*
@@ -136,7 +136,7 @@ jobs:
               --detach-sign --armor "$artifact"
           done
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: standalone-dist
           path: out/*
@@ -203,7 +203,7 @@ jobs:
               --detach-sign --armor "$artifact"
           done
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: apk-dist
           path: out/*

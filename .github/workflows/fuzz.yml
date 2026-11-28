@@ -33,7 +33,7 @@ jobs:
         # Only when the fuzz step itself failed (not e.g. pip install),
         # so the .hypothesis directory is guaranteed to exist.
         if: failure() && steps.fuzz.outcome == 'failure'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: hypothesis-examples
           path: .hypothesis/examples/
